@@ -19,14 +19,21 @@ function getProgramOpts(args) {
             "toDate": Date,
             "outputFolder": String,
             "holidaysFile": String,
-            "mongouri": String
+            "mongouri": String,
+            "downloadPause": Number,
+            "unzipPause": Number,
+            "parsePause": Number
         },
         parsed = nopt(knownOpts, {}, args, 2);
-    parsed.fromDate = parsed.fromDate || new Date(Date.parse('2014-12-05'));
+    parsed.fromDate = parsed.fromDate || new Date(Date.parse('1999-01-01'));
     parsed.toDate = parsed.toDate || new Date(Date.parse('2014-12-05'));
     parsed.outputFolder = parsed.outputFolder || "f:/projects/data/nseData";
     parsed.holidaysFile = parsed.holidaysFile || "./holidays.txt";
     parsed.mongouri = parsed.mongouri || "mongodb://localhost:27017/test";
+    parsed.downloadPause = parsed.downloadPause || 700;
+    parsed.unzipPause = parsed.unzipPause || 750;
+    parsed.parsePause = parsed.parsePause || 2000;
+
     parsed.fromDate = mu.hackDateForTZ(parsed.fromDate);
     parsed.toDate = mu.hackDateForTZ(parsed.toDate);
     delete parsed.argv;
@@ -52,7 +59,7 @@ events.on('start downloads', function (event, errCb) {
             }, errCb);
             counter += 1;
         }
-    }, 5000, dates);
+    }, options.downloadPause, dates);
 });
 events.on('download for date', function (event, errCb) {
     var bhavcopy = event.bhavcopy,
@@ -109,7 +116,7 @@ events.on('start unzip', function (event, errCb) {
             }, errCb);
             counter += 1;
         }
-    }, 1000, dates);
+    }, options.unzipPause, dates);
 });
 events.on('unzip', function (event, errCb) {
     event.startTime = +new Date();
@@ -161,7 +168,7 @@ events.on('start csv process', function (event, errCb) {
             }, errCb);
             counter += 1;
         }
-    }, 2500, dates);
+    }, options.parsePause, dates);
 });
 events.on('process csv', function (event, errCb) {
     event.startTime = +new Date();

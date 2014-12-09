@@ -31,9 +31,8 @@ function getProgramOpts(args) {
     parsed.holidaysFile = parsed.holidaysFile || "./holidays.txt";
     parsed.mongouri = parsed.mongouri || "mongodb://localhost:27017/test";
     parsed.downloadPause = parsed.downloadPause || 700;
-    parsed.unzipPause = parsed.unzipPause || 750;
-    parsed.parsePause = parsed.parsePause || 2000;
-
+    parsed.unzipPause = parsed.unzipPause || 100;
+    parsed.parsePause = parsed.parsePause || 1000;
     parsed.fromDate = mu.hackDateForTZ(parsed.fromDate);
     parsed.toDate = mu.hackDateForTZ(parsed.toDate);
     delete parsed.argv;
@@ -122,7 +121,7 @@ events.on('unzip', function (event, errCb) {
     event.startTime = +new Date();
     var unzipped = event.bhavcopy.unzip(errCb);
     event.endTime = +new Date();
-    logger.info("unzipped ", event.bhavcopy.zipfilename(), " " + event.counter + " of " + event.total + " took " + (event.startTime - event.endTime) + " ms");
+    logger.info("unzipped ", event.bhavcopy.zipfilename(), " " + event.counter + " of " + event.total + " took " + (event.endTime - event.startTime) + " ms");
     if (unzipped.length === 0) {
         retries.push(event);
     } else {
@@ -172,12 +171,12 @@ events.on('start csv process', function (event, errCb) {
 });
 events.on('process csv', function (event, errCb) {
     event.startTime = +new Date();
-    logger.info("processing csv file : ", event.bhavcopy.csvfilename() + " " + event.counter + " of " + event.total);
     event.bhavcopy.parse(function (record) {
         events.emit('save record', {record: record}, errCb);
     }, function (count) {
         event.count = count;
         event.endTime = +new Date();
+        logger.info('csv processing complete ', event.bhavcopy.csvfilename() + ". " + event.count + " records processed. file " + event.counter + " of " + event.total + " took " + (event.endTime - event.startTime) + " ms");
         events.emit('csv parse complete', event, errCb);
     }, errCb);
 });
@@ -188,17 +187,17 @@ events.on('save record', function (event, errCb) {
     var prices = mongodb.collection('prices');
     prices.find({symbol: record.symbol, series: record.series, date: record.date}, function (err, docs) {
         if (err) {
-            errCb.reportError(new Error("MongoFindError", {err: err, record: record}));
+            errCb.reportError(new Error("MongoFindError: " + JSON.stringify({err: err, record: record})));
         }
         if (docs.length > 1) {
-            errCb.reportError(new Error("MongoDuplicateError", {err: "Record already exists", record: record}));
+            errCb.reportError(new Error("MongoDuplicateError: " + JSON.stringify({err: "Record already exists", record: record})));
         }
         if (docs.length === 1) {
             record._id = docs[0]._id;
         }
         prices.save(record, {w: 1}, function (err, doc) {
             if (err) {
-                errCb.reportError(new Error("MongoSaveError", {err: err, record: record}));
+                errCb.reportError(new Error("MongoSaveError: " + JSON.stringify({err: err, record: record})));
             }
             if (doc !== 1) {
                 record._id = doc._id;
@@ -212,7 +211,6 @@ events.on('csv parse complete', function (event, errCb) {
     var options = event.options,
         date = event.date,
         endDate = options.toDate;
-    logger.info('csv processing complete ', event.bhavcopy.csvfilename() + " " + event.count + " records processed. file " + event.counter + " of " + event.total + " took " + (event.endTime - event.startTime) + " ms");
     if (options && date >= endDate) {
         //hopefully this is the last one;
         events.emit('all csv processing complete', event, errCb);
@@ -229,13 +227,13 @@ events.on('all csv processing complete', function (event, errCb) {
 var opts = getProgramOpts(process.argv);
 mongoclient.connect(opts.mongouri, function (err, db) {
     if (err) {
-        mu.handleError.reportError(new Error("MongoConnectionError", {err: err}));
+        mu.handleError.reportError(new Error("MongoConnectionError: " + JSON.stringify({err: err})));
     }
     mongodb = db;
     logger.info('connected to mongo');
 });
 
-events.emit('start downloads', {options: opts}, mu.handleError);
+events.emit('start unzip', {options: opts}, mu.handleError);
 
 events.on('all complete', function (event, errCb) {
     logger.info('ALL DONE. sleeping');

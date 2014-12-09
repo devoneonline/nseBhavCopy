@@ -57,15 +57,15 @@ Bhavcopy.prototype.download = function (doneCb, retryCb, retryCount, errCb) {
             if (exists) {
                 fs.stat(filename, function (err, stats) {
                     if (err) {
-                        errCb.reportError(new Error("DownloadFailed", {err: err, msg: "could not stat file " + filename}));
+                        errCb.reportError(new Error("DownloadFailed: " + JSON.stringify({err: err, msg: "could not stat file " + filename})));
                     }
                     if (stats.size < 1000) {
-                        errCb.reportError(new Error("DownloadError", {filename: filename, err: stats }));
+                        errCb.reportError(new Error("DownloadError: " + JSON.stringify({filename: filename, err: stats })));
                         fs.unlink(filename);
                         if (retryCount === 0) {
                             retryCb();
                         } else {
-                            errCb.reportError(new Error("DownloadError", {filename: filename, err: "downloaded file < 1000 bytes, something is wrong"}));
+                            errCb.reportError(new Error("DownloadError: " + JSON.stringify({filename: filename, err: "downloaded file < 1000 bytes, something is wrong"})));
                         }
                     }
                     doneCb(filename);
@@ -74,7 +74,7 @@ Bhavcopy.prototype.download = function (doneCb, retryCb, retryCount, errCb) {
         });
     });
     req.on('error', function (err) {
-        errCb.reportError(new Error("DownloadError", {filename: filename, err: err}));
+        errCb.reportError(new Error("DownloadError: " + JSON.stringify({filename: filename, err: err})));
     });
     return filename;
 };
@@ -93,10 +93,10 @@ Bhavcopy.prototype.unzip = function (errCb) {
                 fs.rename(self.inFolder + "\\" + zipEntry.entryName, self.csvfilename());
             });
         } catch (err) {
-            errCb.reportError(new Error("UnzipError", {filename: filename, error: err}));
+            errCb.reportError(new Error("UnzipError: " + JSON.stringify({filename: filename, error: err})));
         }
     } else {
-        errCb.reportError(new Error("UnzipError", {filename: filename, err: "trying to unzip nonexistent file"}));
+        errCb.reportError(new Error("UnzipError: " + JSON.stringify({filename: filename, err: "trying to unzip nonexistent file"})));
     }
     return entry;
 };
@@ -130,10 +130,10 @@ Bhavcopy.prototype.parse = function (parseCb, doneCb, errCb) {
         }).on('end', function () {
             doneCb(recordCounter);
         }).on('error', function (err) {
-            errCb.reportError(new Error("CSVError", {filename: filename, err: err}));
+            errCb.reportError(new Error("CSVError: " + JSON.stringify({filename: filename, err: err})));
         });
     } catch (err) {
-        errCb.reportError(new Error("CSVOpenError", {filename: filename, err: err}));
+        errCb.reportError(new Error("CSVOpenError: " + JSON.stringify({filename: filename, err: err})));
     }
 };
 

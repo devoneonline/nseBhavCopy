@@ -59,7 +59,7 @@ Bhavcopy.prototype.download = function (doneCb, retryCb, retryCount, errCb) {
                     if (err) {
                         errCb.reportError(new Error("DownloadFailed: " + JSON.stringify({err: err, msg: "could not stat file " + filename})));
                     }
-                    if (stats.size < 1000) {
+                    if (stats.size < 100) {
                         errCb.reportError(new Error("DownloadError: " + JSON.stringify({filename: filename, err: stats })));
                         fs.unlink(filename);
                         if (retryCount === 0) {
@@ -109,24 +109,26 @@ Bhavcopy.prototype.parse = function (parseCb, doneCb, errCb) {
         csv.fromPath(filename, {
             objectMode: true,
             headers: true,
-            ignoreEmpty: false,
+            ignoreEmpty: true,
             trim: true
         }).on('data', function (data) {
-            recordCounter += 1;
-            var price = {
-                symbol: data.SYMBOL,
-                series: data.SERIES,
-                date: mu.hackDateForTZ(new Date(Date.parse(data.TIMESTAMP))),
-                open: Number(data.OPEN),
-                high: Number(data.HIGH),
-                low: Number(data.LOW),
-                close: Number(data.CLOSE),
-                last: Number(data.LAST),
-                trdQty: Number(data.TOTTRDQTY),
-                trdVal: Number(data.TOTTRDVAL),
-                transactionCosts: (data.HIGH - data.LOW) / data.CLOSE
-            };
-            parseCb(price);
+            if (data.symbol !== 'SYMBOL') {
+                recordCounter += 1;
+                var price = {
+                    symbol: data.SYMBOL,
+                    series: data.SERIES,
+                    date: mu.hackDateForTZ(new Date(Date.parse(data.TIMESTAMP))),
+                    open: Number(data.OPEN),
+                    high: Number(data.HIGH),
+                    low: Number(data.LOW),
+                    close: Number(data.CLOSE),
+                    last: Number(data.LAST),
+                    trdQty: Number(data.TOTTRDQTY),
+                    trdVal: Number(data.TOTTRDVAL),
+                    transactionCosts: (data.HIGH - data.LOW) / data.CLOSE
+                };
+                parseCb(price);
+            }
         }).on('end', function () {
             doneCb(recordCounter);
         }).on('error', function (err) {

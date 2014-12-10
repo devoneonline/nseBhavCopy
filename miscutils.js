@@ -87,6 +87,9 @@ dateIterator.prototype.getAllDates = function (fromDate, toDate) {
         endDate = self._prev(endDate);
     }
     var startDate = new Date(fromDate);
+    if (self.isHoliday(startDate)) {
+        startDate = self._next(startDate);
+    }
     var date = startDate;
     var datesQueue = [];
     while (date <= endDate) {

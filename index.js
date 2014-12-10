@@ -3,6 +3,7 @@
 /*jslint vars: true, stupid: true */
 
 var nopt = require('nopt');
+var defaultOptions = require('./options.js').defaultOptions;
 var mongoclient = require('mongodb').MongoClient;
 var timer = require('exectimer');
 var logger = require('./logger.js');
@@ -25,14 +26,14 @@ function getProgramOpts(args) {
             "parsePause": Number
         },
         parsed = nopt(knownOpts, {}, args, 2);
-    parsed.fromDate = parsed.fromDate || new Date(Date.parse('1999-01-01'));
-    parsed.toDate = parsed.toDate || new Date(Date.parse('2014-12-05'));
-    parsed.outputFolder = parsed.outputFolder || "f:/projects/data/nseData";
-    parsed.holidaysFile = parsed.holidaysFile || "./holidays.txt";
-    parsed.mongouri = parsed.mongouri || "mongodb://localhost:27017/test";
-    parsed.downloadPause = parsed.downloadPause || 700;
-    parsed.unzipPause = parsed.unzipPause || 100;
-    parsed.parsePause = parsed.parsePause || 1000;
+    parsed.fromDate = parsed.fromDate || defaultOptions.fromDate;
+    parsed.toDate = parsed.toDate || defaultOptions.toDate;
+    parsed.outputFolder = parsed.outputFolder || defaultOptions.outputFolder;
+    parsed.holidaysFile = parsed.holidaysFile || defaultOptions.holidaysFile;
+    parsed.mongouri = parsed.mongouri || defaultOptions.monoguri;
+    parsed.downloadPause = parsed.downloadPause || defaultOptions.downloadPause;
+    parsed.unzipPause = parsed.unzipPause || defaultOptions.unzipPause;
+    parsed.parsePause = parsed.parsePause || defaultOptions.parsePause;
     parsed.fromDate = mu.hackDateForTZ(parsed.fromDate);
     parsed.toDate = mu.hackDateForTZ(parsed.toDate);
     delete parsed.argv;
@@ -43,6 +44,8 @@ events.on('start downloads', function (event, errCb) {
     var options = event.options;
     var dateIter = new DateIterator(options.holidaysFile);
     var dates = dateIter.getAllDates(options.fromDate, options.toDate);
+    options.fromDate = dates[0];
+    options.toDate = dates[dates.length - 1];
     var counter = 1;
     var total = dates.length;
     var id = setInterval(function (dates) {
@@ -100,6 +103,8 @@ events.on('start unzip', function (event, errCb) {
     var options = event.options;
     var dateIter = new DateIterator(options.holidaysFile);
     var dates = dateIter.getAllDates(options.fromDate, options.toDate);
+    options.fromDate = dates[0];
+    options.toDate = dates[dates.length - 1];
     var counter = 1;
     var total = dates.length;
     var id = setInterval(function (dates) {
@@ -118,21 +123,23 @@ events.on('start unzip', function (event, errCb) {
     }, options.unzipPause, dates);
 });
 events.on('unzip', function (event, errCb) {
-    event.startTime = +new Date();
-    var unzipped = event.bhavcopy.unzip(errCb);
-    event.endTime = +new Date();
-    logger.info("unzipped ", event.bhavcopy.zipfilename(), " " + event.counter + " of " + event.total + " took " + (event.endTime - event.startTime) + " ms");
-    if (unzipped.length === 0) {
-        retries.push(event);
-    } else {
-        event.unzipped = unzipped[0];
-    }
-    var date = event.bhavcopy.forDate(),
-        options = event.options,
-        endDate = options ? options.toDate : null;
-    if (options && date >= endDate) {
-        //hopefully this is the last one;
-        events.emit('all unzip complete', event, errCb);
+    if (event.retryCount <= 1) {
+        event.startTime = +new Date();
+        var unzipped = event.bhavcopy.unzip(errCb);
+        event.endTime = +new Date();
+        logger.info("unzipped ", event.bhavcopy.zipfilename(), " " + event.counter + " of " + event.total + " took " + (event.endTime - event.startTime) + " ms");
+        if (unzipped.length === 0) {
+            retries.push(event);
+        } else {
+            event.unzipped = unzipped[0];
+        }
+        var date = event.bhavcopy.forDate(),
+            options = event.options,
+            endDate = options ? options.toDate : null;
+        if (options && date >= endDate) {
+            //hopefully this is the last one;
+            events.emit('all unzip complete', event, errCb);
+        }
     }
 });
 events.on('all unzip complete', function (event, errCb) {
@@ -152,6 +159,8 @@ events.on('start csv process', function (event, errCb) {
     var options = event.options;
     var dateIter = new DateIterator(options.holidaysFile);
     var dates = dateIter.getAllDates(options.fromDate, options.toDate);
+    options.fromDate = dates[0];
+    options.toDate = dates[dates.length - 1];
     var counter = 1;
     var total = dates.length;
     var id = setInterval(function (dates) {
@@ -172,7 +181,7 @@ events.on('start csv process', function (event, errCb) {
 events.on('process csv', function (event, errCb) {
     event.startTime = +new Date();
     event.bhavcopy.parse(function (record) {
-        events.emit('save record', {record: record}, errCb);
+        events.emit('save record', {date: event.date, record: record, options: event.options}, errCb);
     }, function (count) {
         event.count = count;
         event.endTime = +new Date();
@@ -220,7 +229,7 @@ mongoclient.connect(opts.mongouri, function (err, db) {
     logger.info('connected to mongo');
 });
 
-events.emit('start csv process', {options: opts}, mu.handleError);
+events.emit('start unzip', {options: opts}, mu.handleError);
 
 events.on('all complete', function (event, errCb) {
     logger.info('ALL DONE. sleeping');
@@ -234,6 +243,6 @@ events.on('all complete', function (event, errCb) {
         logger.info(mongoSaveStats.mean()); // mean tick duration
         logger.info(mongoSaveStats.median()); // median tick duration
         logger.warn('Exiting now');
-    }, 180000);
+    }, 60000);
 });
 

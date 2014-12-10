@@ -5,7 +5,7 @@ var defaultOptions = {
     holidaysFile: "./holidays.txt",
     monoguri: "mongodb://localhost:27017/test",
     downloadPause: 2000,
-    unzipPause: 200,
+    unzipPause: 100,
     parsePause: 1000
 };
 

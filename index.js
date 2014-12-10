@@ -57,7 +57,8 @@ events.on('start downloads', function (event, errCb) {
                 bhavcopy: new Bhavcopy(dt, options.outputFolder),
                 options: options,
                 counter: counter,
-                total: total
+                total: total,
+                retryCount: 0
             }, errCb);
             counter += 1;
         }
@@ -65,7 +66,7 @@ events.on('start downloads', function (event, errCb) {
 });
 events.on('download for date', function (event, errCb) {
     var bhavcopy = event.bhavcopy,
-        retryCount = event.retryCount || 0;
+        retryCount = event.retryCount;
     event.startTime = +new Date();
     bhavcopy.download(function (filename) {
         event.filename = filename;
@@ -116,7 +117,8 @@ events.on('start unzip', function (event, errCb) {
                 bhavcopy: new Bhavcopy(dt, options.outputFolder),
                 options: options,
                 counter: counter,
-                total: total
+                total: total,
+                retryCount: 0
             }, errCb);
             counter += 1;
         }
@@ -220,17 +222,6 @@ events.on('all csv processing complete', function (event, errCb) {
     events.emit('all complete', {}, errCb);
 });
 
-var opts = getProgramOpts(process.argv);
-mongoclient.connect(opts.mongouri, function (err, db) {
-    if (err) {
-        mu.handleError.reportError(new Error("MongoConnectionError: " + JSON.stringify({err: err})));
-    }
-    mongodb = db;
-    logger.info('connected to mongo');
-});
-
-events.emit('start unzip', {options: opts}, mu.handleError);
-
 events.on('all complete', function (event, errCb) {
     logger.info('ALL DONE. sleeping');
     setTimeout(function () {
@@ -244,5 +235,16 @@ events.on('all complete', function (event, errCb) {
         logger.info(mongoSaveStats.median()); // median tick duration
         logger.warn('Exiting now');
     }, 60000);
+});
+
+var opts = getProgramOpts(process.argv);
+logger.info("running with options : " + JSON.stringify(opts));
+events.emit('start csv process', {options: opts}, mu.handleError);
+mongoclient.connect(opts.mongouri, function (err, db) {
+    if (err) {
+        mu.handleError.reportError(new Error("MongoConnectionError: " + JSON.stringify({err: err})));
+    }
+    mongodb = db;
+    logger.info('connected to mongo');
 });
 

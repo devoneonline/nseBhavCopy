@@ -185,25 +185,12 @@ events.on('save record', function (event, errCb) {
     var record = event.record;
     tick.start();
     var prices = mongodb.collection('prices');
-    prices.find({symbol: record.symbol, series: record.series, date: record.date}, function (err, docs) {
+    prices.findAndModify({date: record.date, symbol: record.symbol, series: record.series}, [['_id', 'asc']], record, {upsert: true}, function (err, doc) {
         if (err) {
-            errCb.reportError(new Error("MongoFindError: " + JSON.stringify({err: err, record: record})));
+            errCb.reportError(new Error("MongoSaveError: " + JSON.stringify({err: err, record: record})));
+        } else {
+            record._id = doc._id;
         }
-        if (docs.length > 1) {
-            errCb.reportError(new Error("MongoDuplicateError: " + JSON.stringify({err: "Record already exists", record: record})));
-        }
-        if (docs.length === 1) {
-            record._id = docs[0]._id;
-        }
-        prices.save(record, {w: 1}, function (err, doc) {
-            if (err) {
-                errCb.reportError(new Error("MongoSaveError: " + JSON.stringify({err: err, record: record})));
-            }
-            if (doc !== 1) {
-                record._id = doc._id;
-                //logger.info('saved: ', record._id);
-            }
-        });
     });
     tick.stop();
 });
@@ -233,7 +220,7 @@ mongoclient.connect(opts.mongouri, function (err, db) {
     logger.info('connected to mongo');
 });
 
-events.emit('start unzip', {options: opts}, mu.handleError);
+events.emit('start csv process', {options: opts}, mu.handleError);
 
 events.on('all complete', function (event, errCb) {
     logger.info('ALL DONE. sleeping');

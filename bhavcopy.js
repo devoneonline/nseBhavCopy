@@ -117,13 +117,13 @@ Bhavcopy.prototype.parse = function (parseCb, doneCb, errCb) {
                 symbol: data.SYMBOL,
                 series: data.SERIES,
                 date: mu.hackDateForTZ(new Date(Date.parse(data.TIMESTAMP))),
-                open: data.OPEN,
-                high: data.HIGH,
-                low: data.LOW,
-                close: data.CLOSE,
-                last: data.LAST,
-                trdQty: data.TOTTRDQTY,
-                trdVal: data.TOTTRDVAL,
+                open: Number(data.OPEN),
+                high: Number(data.HIGH),
+                low: Number(data.LOW),
+                close: Number(data.CLOSE),
+                last: Number(data.LAST),
+                trdQty: Number(data.TOTTRDQTY),
+                trdVal: Number(data.TOTTRDVAL),
                 transactionCosts: (data.HIGH - data.LOW) / data.CLOSE
             };
             parseCb(price);

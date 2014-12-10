@@ -2,7 +2,7 @@ var winston = require('winston');
 var logger = new winston.Logger({
     transports: [
         new winston.transports.File({
-            filename: 'bhavcopy.out',
+            filename: './logs/bhavcopy.log',
             level: 'debug',
             handleExceptions: true,
             json: true,

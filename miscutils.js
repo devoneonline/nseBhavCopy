@@ -57,7 +57,7 @@ dateIterator.prototype._next = function (date) {
     return isHoliday ? this._next(nextdate) : nextdate;
 };
 
-dateIterator.prototype.isHoliday = function (date) {
+dateIterator.prototype._isHoliday = function (date) {
     var self = this;
     var ret = false;
     var i = 0;
@@ -83,11 +83,11 @@ dateIterator.prototype._prev = function (date) {
 dateIterator.prototype.getAllDates = function (fromDate, toDate) {
     var self = this;
     var endDate = new Date(toDate);
-    if (self.isHoliday(endDate)) {
+    if (self._isHoliday(endDate)) {
         endDate = self._prev(endDate);
     }
     var startDate = new Date(fromDate);
-    if (self.isHoliday(startDate)) {
+    if (self._isHoliday(startDate)) {
         startDate = self._next(startDate);
     }
     var date = startDate;
@@ -100,3 +100,4 @@ dateIterator.prototype.getAllDates = function (fromDate, toDate) {
 };
 
 module.exports.dateIterator = dateIterator;
+

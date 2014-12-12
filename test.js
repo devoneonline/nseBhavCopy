@@ -25,7 +25,7 @@ function dateIterator(holidaysFile) {
             iteratedUntil = i;
             return isHoliday ? this.next(nextdate) : nextdate;
         },
-        isHoliday: function (date) {
+        _isHoliday: function (date) {
             var ret = false,
                 i = 0;
             for (i = 0; i < holidaysDts.length && !ret; i += 1) {

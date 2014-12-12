@@ -79,10 +79,7 @@ events.on('download for date', function (event, errCb) {
 });
 events.on('download complete', function (event, errCb) {
     logger.info('download complete ', event.bhavcopy.zipfilename(), ' ' + event.counter + ' of ' + event.total + " took " + (event.endTime - event.startTime) + " ms");
-    var date = event.bhavcopy.forDate(),
-        options = event.options,
-        endDate = options ? options.toDate : null;
-    if (options && date >= endDate) {
+    if (event.counter === event.total) {
         //hopefully this is the last one;
         events.emit('all downloads complete', event, errCb);
     }
@@ -135,10 +132,7 @@ events.on('unzip', function (event, errCb) {
         } else {
             event.unzipped = unzipped[0];
         }
-        var date = event.bhavcopy.forDate(),
-            options = event.options,
-            endDate = options ? options.toDate : null;
-        if (options && date >= endDate) {
+        if (event.counter === event.total) {
             //hopefully this is the last one;
             events.emit('all unzip complete', event, errCb);
         }
@@ -206,10 +200,7 @@ events.on('save record', function (event, errCb) {
     tick.stop();
 });
 events.on('csv parse complete', function (event, errCb) {
-    var options = event.options,
-        date = event.date,
-        endDate = options.toDate;
-    if (options && date >= endDate) {
+    if (event.counter === event.total) {
         //hopefully this is the last one;
         events.emit('all csv processing complete', event, errCb);
     }
@@ -226,7 +217,7 @@ events.on('all complete', function (event, errCb) {
     logger.info('ALL DONE. sleeping');
     setTimeout(function () {
         mongodb.close();
-        var mongoSaveStats = tick.timers.mongoSave;
+        var mongoSaveStats = tick.timer.mongoSave;
         // Display the results
         logger.info(mongoSaveStats.duration()); // total duration of all ticks
         logger.info(mongoSaveStats.min()); // minimal tick duration
@@ -234,7 +225,7 @@ events.on('all complete', function (event, errCb) {
         logger.info(mongoSaveStats.mean()); // mean tick duration
         logger.info(mongoSaveStats.median()); // median tick duration
         logger.warn('Exiting now');
-    }, 60000);
+    }, 600000);
 });
 
 var opts = getProgramOpts(process.argv);

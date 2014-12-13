@@ -268,13 +268,7 @@ Calendar.prototype.enrich = function (dt) {
 Calendar.prototype._getAllDates = function (fromDate, toDate) {
     var self = this;
     var endDate = hackDateForTZ(new Date(toDate));
-    if (self._isHoliday(endDate)) {
-        endDate = self._adjBk(prevDate(endDate));
-    }
     var startDate = hackDateForTZ(new Date(fromDate));
-    if (self._isHoliday(startDate)) {
-        startDate = self._adjFwd(nextDate(startDate));
-    }
     var date = startDate;
     var datesQueue = [];
     while (date <= endDate) {

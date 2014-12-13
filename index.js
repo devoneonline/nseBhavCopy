@@ -5,14 +5,16 @@
 var nopt = require('nopt');
 var defaultOptions = require('./options.js').defaultOptions;
 var mongoclient = require('mongodb').MongoClient;
+var moment = require('moment');
 var timer = require('exectimer');
 var logger = require('./logger.js');
 var mu = require('./miscutils.js');
-var DateIterator = mu.dateIterator;
+var Calendar = require('./calendar.js').Calendar;
 var Bhavcopy = require('./bhavcopy.js').Bhavcopy;
 var events = new (require('events').EventEmitter)();
 var mongodb;
 var retries = [];
+var calendar;
 
 function getProgramOpts(args) {
     var knownOpts = {
@@ -40,29 +42,36 @@ function getProgramOpts(args) {
     return parsed;
 }
 
+function doForEveryDate(options, pause, eventRaiser) {
+    var currDate = calendar.date(options.fromDate);
+    var counter = 1;
+    var total = moment(options.fromDate).diff(moment(options.toDate), 'days');
+    var id = setInterval(function (currDate) {
+        if (!mu.areEqual(currDate.date, options.toDate)) {
+            if (currDate.isWorkingDay) {
+                eventRaiser(currDate.date, counter, total);
+            } else {
+                logger.info('skipping holiday ' + currDate.date);
+            }
+            counter += 1;
+            currDate = calendar.date(currDate.next);
+        } else {
+            clearInterval(id);
+        }
+    }, pause, currDate);
+}
+
 events.on('start downloads', function (event, errCb) {
     var options = event.options;
-    var dateIter = new DateIterator(options.holidaysFile);
-    var dates = dateIter.getAllDates(options.fromDate, options.toDate);
-    options.fromDate = dates[0];
-    options.toDate = dates[dates.length - 1];
-    var counter = 1;
-    var total = dates.length;
-    var id = setInterval(function (dates) {
-        if (dates.length === 0) {
-            clearInterval(id);
-        } else {
-            var dt = dates.shift();
-            events.emit('download for date', {
-                bhavcopy: new Bhavcopy(dt, options.outputFolder),
-                options: options,
-                counter: counter,
-                total: total,
-                retryCount: 0
-            }, errCb);
-            counter += 1;
-        }
-    }, options.downloadPause, dates);
+    doForEveryDate(options, options.downloadPause, function (dt, counter, total) {
+        events.emit('download for date', {
+            bhavcopy: new Bhavcopy(dt, options.outputFolder),
+            options: options,
+            counter: counter,
+            total: total,
+            retryCount: 0
+        }, errCb);
+    });
 });
 events.on('download for date', function (event, errCb) {
     var bhavcopy = event.bhavcopy,
@@ -99,27 +108,15 @@ events.on('all downloads complete', function (event, errCb) {
 });
 events.on('start unzip', function (event, errCb) {
     var options = event.options;
-    var dateIter = new DateIterator(options.holidaysFile);
-    var dates = dateIter.getAllDates(options.fromDate, options.toDate);
-    options.fromDate = dates[0];
-    options.toDate = dates[dates.length - 1];
-    var counter = 1;
-    var total = dates.length;
-    var id = setInterval(function (dates) {
-        if (dates.length === 0) {
-            clearInterval(id);
-        } else {
-            var dt = dates.shift();
-            events.emit('unzip', {
-                bhavcopy: new Bhavcopy(dt, options.outputFolder),
-                options: options,
-                counter: counter,
-                total: total,
-                retryCount: 0
-            }, errCb);
-            counter += 1;
-        }
-    }, options.unzipPause, dates);
+    doForEveryDate(options, options.unzipPause, function (dt, counter, total) {
+        events.emit('unzip', {
+            bhavcopy: new Bhavcopy(dt, options.outputFolder),
+            options: options,
+            counter: counter,
+            total: total,
+            retryCount: 0
+        }, errCb);
+    });
 });
 events.on('unzip', function (event, errCb) {
     if (event.retryCount <= 1) {
@@ -153,26 +150,14 @@ events.on('all unzip complete', function (event, errCb) {
 });
 events.on('start csv process', function (event, errCb) {
     var options = event.options;
-    var dateIter = new DateIterator(options.holidaysFile);
-    var dates = dateIter.getAllDates(options.fromDate, options.toDate);
-    options.fromDate = dates[0];
-    options.toDate = dates[dates.length - 1];
-    var counter = 1;
-    var total = dates.length;
-    var id = setInterval(function (dates) {
-        if (dates.length === 0) {
-            clearInterval(id);
-        } else {
-            var dt = dates.shift();
-            events.emit('process csv', {
-                bhavcopy: new Bhavcopy(dt, options.outputFolder),
-                options: options,
-                counter: counter,
-                total: total
-            }, errCb);
-            counter += 1;
-        }
-    }, options.parsePause, dates);
+    doForEveryDate(options, options.unzipPause, function (dt, counter, total) {
+        events.emit('process csv', {
+            bhavcopy: new Bhavcopy(dt, options.outputFolder),
+            options: options,
+            counter: counter,
+            total: total
+        }, errCb);
+    });
 });
 events.on('process csv', function (event, errCb) {
     event.startTime = +new Date();
@@ -229,6 +214,8 @@ events.on('all complete', function (event, errCb) {
 });
 
 var opts = getProgramOpts(process.argv);
+calendar = new Calendar(opts.holidaysFile, opts.fromDate, opts.toDate);
+
 logger.info("running with options : " + JSON.stringify(opts));
 events.emit('start csv process', {options: opts}, mu.handleError);
 mongoclient.connect(opts.mongouri, function (err, db) {

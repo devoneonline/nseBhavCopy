@@ -35,69 +35,16 @@ function isSameDate(date1, date2) {
 }
 module.exports.areEqual = isSameDate;
 
-var dateIterator = function (holidaysFile) {
-    var self = this;
-    self.holidaysDts = fs.readFileSync(holidaysFile).toString().split("\n").map(function (date) {
-        return hackDateForTZ(new Date(Date.parse(date)));
+function deepFreeze(o) {
+    Object.freeze(o);
+    var oIsFunction = typeof o === "function";
+    var hasOwnProp = Object.prototype.hasOwnProperty;
+    Object.getOwnPropertyNames(o).forEach(function (prop) {
+        if (hasOwnProp.call(o, prop) && (oIsFunction ? prop !== 'caller' && prop !== 'callee' && prop !== 'arguments' : true) && o[prop] !== null && (typeof o[prop] === "object" || typeof o[prop] === "function") && !Object.isFrozen(o[prop])) {
+            deepFreeze(o[prop]);
+        }
     });
-    self.iteratedUntil = 0;
-    self.iteratedSince = self.holidaysDts.length;
-};
+    return o;
+}
 
-dateIterator.prototype._next = function (date) {
-    var self = this;
-    var dt = new Date(date);
-    var nextdate = hackDateForTZ(new Date(dt.setDate(dt.getDate() + 1)));
-    var isHoliday = false;
-    var i = 0;
-    for (i = self.iteratedUntil; i < self.holidaysDts.length && !isHoliday && self.holidaysDts[i] <= nextdate; i += 1) {
-        isHoliday = isSameDate(self.holidaysDts[i], nextdate);
-    }
-    self.iteratedUntil = i;
-    return isHoliday ? this._next(nextdate) : nextdate;
-};
-
-dateIterator.prototype._isHoliday = function (date) {
-    var self = this;
-    var ret = false;
-    var i = 0;
-    for (i = 0; i < self.holidaysDts.length && !ret; i += 1) {
-        ret = isSameDate(self.holidaysDts[i], date);
-    }
-    return ret;
-};
-
-dateIterator.prototype._prev = function (date) {
-    var self = this;
-    var dt = new Date(date);
-    var prevdate = hackDateForTZ(new Date(dt.setDate(dt.getDate() - 1)));
-    var isHoliday = false;
-    var i = 0;
-    for (i = self.iteratedSince; i > 0 && !isHoliday && self.holidaysDts[i] >= prevdate; i -= 1) {
-        isHoliday = isSameDate(self.holidaysDts[i], prevdate);
-    }
-    self.iteratedSince = i;
-    return isHoliday ? this._prev(prevdate) : prevdate;
-};
-
-dateIterator.prototype.getAllDates = function (fromDate, toDate) {
-    var self = this;
-    var endDate = new Date(toDate);
-    if (self._isHoliday(endDate)) {
-        endDate = self._prev(endDate);
-    }
-    var startDate = new Date(fromDate);
-    if (self._isHoliday(startDate)) {
-        startDate = self._next(startDate);
-    }
-    var date = startDate;
-    var datesQueue = [];
-    while (date <= endDate) {
-        datesQueue.push(date);
-        date = self._next(date);
-    }
-    return datesQueue;
-};
-
-module.exports.dateIterator = dateIterator;
-
+module.exports.deepFreeze = deepFreeze;

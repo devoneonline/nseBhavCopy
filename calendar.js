@@ -4,6 +4,7 @@
 
 var fs = require('fs');
 var hackDateForTZ = require('./miscutils.js').hackDateForTZ;
+var deepFreeze = require('./miscutils.js').deepFreeze;
 var dateformat = require('dateformat');
 
 var weekdays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -22,26 +23,6 @@ function isWeekend(date) {
 
 function isWeekday(date) {
     return !isWeekend(date);
-}
-
-function binarySearchIndexOf(searchElement, arr) {
-    var minIndex = 0;
-    var maxIndex = arr.length - 1;
-    var currentIndex;
-    var currentElement;
-
-    while (minIndex <= maxIndex) {
-        currentIndex = (minIndex + maxIndex) / 2 | 0;
-        currentElement = arr[currentIndex];
-        if (currentElement < searchElement) {
-            minIndex = currentIndex + 1;
-        } else if (currentElement > searchElement) {
-            maxIndex = currentIndex - 1;
-        } else {
-            return currentIndex;
-        }
-    }
-    return -1;
 }
 
 function nextDate(date) {
@@ -182,16 +163,25 @@ function nextYearStart(yr) {
     return hackDateForTZ(new Date(yr + 1, 0, 1));
 }
 
-var Calendar = function (holidaysFile) {
+var Calendar = function (holidaysFile, fromDate, toDate) {
     var self = this;
-    self.holidaysDts = fs.readFileSync(holidaysFile).toString().split("\n").map(function (date) {
+    self.holidays = {};
+    self.dates = {};
+    var holidaysDts = fs.readFileSync(holidaysFile).toString().split("\n").map(function (date) {
         return hackDateForTZ(new Date(Date.parse(date)));
+    });
+    holidaysDts.forEach(function (dt) {
+        self.holidays[dt] = true;
+    });
+    var enrichedDates = self._getAllDates(fromDate, toDate);
+    enrichedDates.forEach(function (edt) {
+        self.dates[edt.date] = edt;
     });
 };
 
 Calendar.prototype._isHoliday = function (date) {
     var self = this;
-    return binarySearchIndexOf(date, self.holidaysDts) !== -1;
+    return self.holidays[date] === true;
 };
 
 Calendar.prototype._adjBk = function (date) {
@@ -200,7 +190,7 @@ Calendar.prototype._adjBk = function (date) {
     if (self._isHoliday(date)) {
         var dt = hackDateForTZ(new Date(date));
         while (self._isHoliday(dt)) {
-            dt = hackDateForTZ(dt.setDate(dt.getDate() - 1));
+            dt = hackDateForTZ(new Date(dt.setDate(dt.getDate() - 1)));
         }
         ret = dt;
     } else {
@@ -215,7 +205,7 @@ Calendar.prototype._adjFwd = function (date) {
     if (self._isHoliday(date)) {
         var dt = hackDateForTZ(new Date(date));
         while (self._isHoliday(dt)) {
-            dt = hackDateForTZ(dt.setDate(dt.getDate() + 1));
+            dt = hackDateForTZ(new Date(dt.setDate(dt.getDate() + 1)));
         }
         ret = hackDateForTZ(dt);
     } else {
@@ -234,14 +224,13 @@ Calendar.prototype.enrich = function (dt) {
     var adjNextDt = self._adjFwd(nextDt);
     var yr = date.getFullYear();
     var mt = date.getMonth();
-    var dayOfWeek = date.getDay();
     var ret = {
         date: hackDateForTZ(new Date(date)),
         dayOfWeek: dayOfWeek(date),
         isWeekend: isWeekend(date),
         isWeekday: isWeekday(date),
         isWorkingDay: !isHoliday,
-        _isHoliday: isHoliday,
+        isHoliday: isHoliday,
         nextDate: adjNextDt,
         prevDate: adjPrevDt,
         prevWeek: self._adjBk(prevWeek(date)),
@@ -273,10 +262,10 @@ Calendar.prototype.enrich = function (dt) {
         prevYearEnd: self._adjBk(prevYearEnd(yr)),
         nextYearStart: self._adjFwd(nextYearStart(yr))
     };
-    return ret;
+    return deepFreeze(ret);
 };
 
-Calendar.prototype.getAllDates = function (fromDate, toDate) {
+Calendar.prototype._getAllDates = function (fromDate, toDate) {
     var self = this;
     var endDate = hackDateForTZ(new Date(toDate));
     if (self._isHoliday(endDate)) {
@@ -295,4 +284,14 @@ Calendar.prototype.getAllDates = function (fromDate, toDate) {
     return datesQueue;
 };
 
+Calendar.prototype.date = function (y, m, d) {
+    var self = this;
+    return self.dates[hackDateForTZ(new Date(y, m, d))];
+};
 
+Calendar.prototype.date = function (dt) {
+    var self = this;
+    return self.dates[hackDateForTZ(new Date(dt.getFullYear(), dt.getMonth(), dt.getDate()))];
+};
+
+module.exports.Calendar = Calendar;

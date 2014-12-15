@@ -23,7 +23,7 @@ Bhavcopy.prototype.forDate = function () {
 
 Bhavcopy.prototype._csvUri = function () {
     var self = this;
-    return "http://www.nseindia.com/content/historical/EQUITIES/" + self.date.getFullYear() + "/" + dateformat(self.date, 'mmm').toUpperCase() + "/cm" + dateformat(self.date, 'ddmmmyyyy').toUpperCase() + "bhav.csv.zip";
+    return 'http://www.nseindia.com/content/historical/EQUITIES/' + self.date.getFullYear() + "/" + dateformat(self.date, 'mmm').toUpperCase() + '/cm' + dateformat(self.date, 'ddmmmyyyy').toUpperCase() + 'bhav.csv.zip';
 };
 
 Bhavcopy.prototype.zipfilename  = function () {
@@ -44,28 +44,28 @@ Bhavcopy.prototype.download = function (doneCb, retryCb, retryCount, errCb) {
             method: 'GET',
             uri: self._csvUri(),
             headers: {
-                "User-Agent": "Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/41.0.2228.0 Safari/537.36",
-                "Accept-Encoding": "gzip,deflate,sdch",
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                "Cookie": "NSE-TEST-1=1809850378.20480.0000"
+                'User-Agent': 'Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/41.0.2228.0 Safari/537.36',
+                'Accept-Encoding': 'gzip,deflate,sdch',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Cookie': 'NSE-TEST-1=1809850378.20480.0000'
             }
         });
-    logger.info("downloading url: ", self._csvUri());
+    logger.info('downloading url: ', self._csvUri());
     req.pipe(fs.createWriteStream(filename));
     req.on('end', function () {
         fs.exists(filename, function (exists) {
             if (exists) {
                 fs.stat(filename, function (err, stats) {
                     if (err) {
-                        errCb.reportError(new Error("DownloadFailed: " + JSON.stringify({err: err, msg: "could not stat file " + filename})));
+                        errCb.reportError(new Error('DownloadFailed: ' + JSON.stringify({err: err, msg: 'could not stat file ' + filename})));
                     }
                     if (stats.size < 100) {
-                        errCb.reportError(new Error("DownloadError: " + JSON.stringify({filename: filename, err: stats })));
+                        errCb.reportError(new Error('DownloadError: ' + JSON.stringify({filename: filename, err: stats })));
                         fs.unlink(filename);
                         if (retryCount === 0) {
                             retryCb();
                         } else {
-                            errCb.reportError(new Error("DownloadError: " + JSON.stringify({filename: filename, err: "downloaded file < 1000 bytes, something is wrong"})));
+                            errCb.reportError(new Error('DownloadError: ' + JSON.stringify({filename: filename, err: 'downloaded file < 1000 bytes, something is wrong'})));
                         }
                     }
                     doneCb(filename);
@@ -74,7 +74,7 @@ Bhavcopy.prototype.download = function (doneCb, retryCb, retryCount, errCb) {
         });
     });
     req.on('error', function (err) {
-        errCb.reportError(new Error("DownloadError: " + JSON.stringify({filename: filename, err: err})));
+        errCb.reportError(new Error('DownloadError: ' + JSON.stringify({filename: filename, err: err})));
     });
     return filename;
 };
@@ -90,13 +90,13 @@ Bhavcopy.prototype.unzip = function (errCb) {
             zipfile.getEntries().forEach(function (zipEntry) {
                 zipfile.extractEntryTo(zipEntry.entryName, self.inFolder, false, true);
                 entry.push(self.csvfilename());
-                fs.rename(self.inFolder + "\\" + zipEntry.entryName, self.csvfilename());
+                fs.rename(self.inFolder + '\\' + zipEntry.entryName, self.csvfilename());
             });
         } catch (err) {
-            errCb.reportError(new Error("UnzipError: " + JSON.stringify({filename: filename, error: err})));
+            errCb.reportError(new Error('UnzipError: ' + JSON.stringify({filename: filename, error: err})));
         }
     } else {
-        errCb.reportError(new Error("UnzipError: " + JSON.stringify({filename: filename, err: "trying to unzip nonexistent file"})));
+        errCb.reportError(new Error('UnzipError: ' + JSON.stringify({filename: filename, err: 'trying to unzip nonexistent file'})));
     }
     return entry;
 };
@@ -132,10 +132,10 @@ Bhavcopy.prototype.parse = function (parseCb, doneCb, errCb) {
         }).on('end', function () {
             doneCb(recordCounter);
         }).on('error', function (err) {
-            errCb.reportError(new Error("CSVError: " + JSON.stringify({filename: filename, err: err})));
+            errCb.reportError(new Error('CSVError: ' + JSON.stringify({filename: filename, err: err})));
         });
     } catch (err) {
-        errCb.reportError(new Error("CSVOpenError: " + JSON.stringify({filename: filename, err: err})));
+        errCb.reportError(new Error('CSVOpenError: ' + JSON.stringify({filename: filename, err: err})));
     }
 };
 

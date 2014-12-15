@@ -31,7 +31,7 @@ function hackDateForTZ(date) {
 module.exports.hackDateForTZ = hackDateForTZ;
 
 function isSameDate(date1, date2) {
-    return date1.getDate() === date2.getDate() && date1.getFullYear() === date2.getFullYear() && date1.getMonth() === date2.getMonth();
+    return date1 && date2 && date1.getDate() === date2.getDate() && date1.getFullYear() === date2.getFullYear() && date1.getMonth() === date2.getMonth();
 }
 module.exports.areEqual = isSameDate;
 

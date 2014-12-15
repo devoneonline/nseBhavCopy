@@ -7,7 +7,7 @@ var hackDateForTZ = require('./miscutils.js').hackDateForTZ;
 var deepFreeze = require('./miscutils.js').deepFreeze;
 var dateformat = require('dateformat');
 
-var weekdays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+var weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 var daysToAddForThisWeekStart = [1, 0, -1, -2, -3, -4, -5, -6];
 var daysToAddForThisWeekEnd = [6, 5, 4, 3, 2, 1, 0, -1];
 var daysToAddForNextWeekStart = [8, 7, 6, 5, 4, 3, 2];
@@ -28,7 +28,7 @@ function isWeekday(date) {
 function nextDate(date) {
     return hackDateForTZ(new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1));
 }
-
+module.exports.nextDate = nextDate;
 function prevDate(date) {
     return hackDateForTZ(new Date(date.getFullYear(), date.getMonth(), date.getDate() - 1));
 }
@@ -43,6 +43,10 @@ function prevMonth(date) {
 
 function prevQuarter(date) {
     return hackDateForTZ(new Date(date.getFullYear(), date.getMonth() - 3, date.getDate()));
+}
+
+function prevHalfYr(date) {
+    return hackDateForTZ(new Date(date.getFullYear(), date.getMonth() - 6, date.getDate()));
 }
 
 function prevYear(date) {
@@ -236,6 +240,7 @@ Calendar.prototype.enrich = function (dt) {
         prevWeek: self._adjBk(prevWeek(date)),
         prevMonth: self._adjBk(prevMonth(date)),
         prevQuarter: self._adjBk(prevQuarter(date)),
+        prevHalfYear: self._adjBk(prevHalfYr(date)),
         prevYear: self._adjBk(prevYear(date)),
         isFirstDayOfWeek: isFirstDayOfWeek(isHoliday, date, adjPrevDt),
         isLastDayOfWeek: isLastDayOfWeek(isHoliday, date, adjNextDt),
@@ -278,7 +283,7 @@ Calendar.prototype._getAllDates = function (fromDate, toDate) {
     return datesQueue;
 };
 
-Calendar.prototype.date = function (y, m, d) {
+Calendar.prototype._date = function (y, m, d) {
     var self = this;
     return self.dates[hackDateForTZ(new Date(y, m, d))];
 };

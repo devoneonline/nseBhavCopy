@@ -1,8 +1,9 @@
 var winston = require('winston');
+
 var logger = new winston.Logger({
     transports: [
         new winston.transports.File({
-            filename: './logs/bhavcopy.log',
+            filename: './logs/nseData' + process.pid + '.log',
             level: 'debug',
             handleExceptions: true,
             json: true,

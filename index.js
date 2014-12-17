@@ -2,71 +2,33 @@
 /*jshint -W081 */
 /*jslint vars: true, stupid: true */
 
-var nopt = require('nopt');
-var defaultOptions = require('./options.js').defaultOptions;
+var getProgramOpts = require('./options.js').getProgramOpts;
+var Calendar = require('./calendar.js').Calendar;
 var mongoclient = require('mongodb').MongoClient;
+var mu = require('./miscutils.js');
+var events = new (require('events').EventEmitter)();
 var moment = require('moment');
 var logger = require('./logger.js');
-var mu = require('./miscutils.js');
-var Calendar = require('./calendar.js').Calendar;
-var nextDate = require('./calendar.js').nextDate;
 var Bhavcopy = require('./bhavcopy.js').Bhavcopy;
-var events = new (require('events').EventEmitter)();
-var mongodb;
+
 var retries = [];
-var calendar;
+var mongodb;
 
-function getProgramOpts(args) {
-    var knownOpts = {
-            'fromDate': Date,
-            'toDate': Date,
-            'outputFolder': String,
-            'holidaysFile': String,
-            'mongouri': String,
-            'downloadPause': Number,
-            'unzipPause': Number,
-            'parsePause': Number,
-            'analysisPause': Number
-        },
-        parsed = nopt(knownOpts, {}, args, 2);
-    parsed.fromDate = parsed.fromDate || defaultOptions.fromDate;
-    parsed.toDate = parsed.toDate || defaultOptions.toDate;
-    parsed.outputFolder = parsed.outputFolder || defaultOptions.outputFolder;
-    parsed.holidaysFile = parsed.holidaysFile || defaultOptions.holidaysFile;
-    parsed.mongouri = parsed.mongouri || defaultOptions.monoguri;
-    parsed.downloadPause = parsed.downloadPause || defaultOptions.downloadPause;
-    parsed.unzipPause = parsed.unzipPause || defaultOptions.unzipPause;
-    parsed.parsePause = parsed.parsePause || defaultOptions.parsePause;
-    parsed.analysisPause = parsed.analysisPause || defaultOptions.analysisPause;
-    parsed.fromDate = mu.hackDateForTZ(parsed.fromDate);
-    parsed.toDate = mu.hackDateForTZ(parsed.toDate);
-    delete parsed.argv;
-    return parsed;
-}
+var opts = getProgramOpts(process.argv);
+var calendar = new Calendar(opts.holidaysFile, opts.fromDate, opts.toDate);
 
-function doForEveryDate(options, pause, eventRaiser) {
-    var currDate = options.fromDate;
-    var counter = 1;
-    var total = moment(options.toDate).diff(moment(options.fromDate), 'days');
-    var id = setInterval(function () {
-        var dt = calendar.date(currDate);
-        if (counter <= total) {
-            if (dt.isWorkingDay) {
-                eventRaiser(dt.date, counter, total);
-            } else {
-                logger.info('skipping holiday ' + JSON.stringify(dt));
-            }
-        } else {
-            clearInterval(id);
-        }
-        currDate = nextDate(currDate);
-        counter += 1;
-    }, pause);
-}
+mongoclient.connect(opts.mongouri, function (err, db) {
+    if (err) {
+        mu.handleError.reportError(new Error('MongoConnectionError: ' + JSON.stringify({err: err})));
+    }
+    mongodb = db;
+    logger.info('connected to mongo');
+});
+
 
 events.on('start downloads', function (event, errCb) {
     var options = event.options;
-    doForEveryDate(options, options.downloadPause, function (dt, counter, total) {
+    mu.doForEveryDate(calendar, options.fromDate, options.toDate, options.downloadPause, function (dt, counter, total) {
         events.emit('download for date', {
             bhavcopy: new Bhavcopy(dt, options.outputFolder),
             options: options,
@@ -103,7 +65,6 @@ events.on('all downloads complete', function (event, errCb) {
         evt.startTime = +new Date();
         events.emit('download for date', evt, errCb);
     });
-    logger.info('------------');
     errCb.listErrors();
     retries = [];
     errCb.clearErrors();
@@ -111,7 +72,7 @@ events.on('all downloads complete', function (event, errCb) {
 });
 events.on('start unzip', function (event, errCb) {
     var options = event.options;
-    doForEveryDate(options, options.unzipPause, function (dt, counter, total) {
+    mu.doForEveryDate(calendar, options.fromDate, options.toDate, options.unzipPause, function (dt, counter, total) {
         events.emit('unzip', {
             bhavcopy: new Bhavcopy(dt, options.outputFolder),
             options: options,
@@ -145,7 +106,6 @@ events.on('all unzip complete', function (event, errCb) {
         evt.retryCount += 1;
         events.emit('unzip', evt, errCb);
     });
-    logger.info('------------');
     errCb.listErrors();
     retries = [];
     errCb.clearErrors();
@@ -153,7 +113,7 @@ events.on('all unzip complete', function (event, errCb) {
 });
 events.on('start csv process', function (event, errCb) {
     var options = event.options;
-    doForEveryDate(options, options.unzipPause, function (dt, counter, total) {
+    mu.doForEveryDate(calendar, options.fromDate, options.toDate, options.unzipPause, function (dt, counter, total) {
         events.emit('process csv', {
             bhavcopy: new Bhavcopy(dt, options.outputFolder),
             options: options,
@@ -196,7 +156,6 @@ events.on('csv parse complete', function (event, errCb) {
 });
 events.on('all csv processing complete', function (event, errCb) {
     logger.info('all csv processing complete');
-    logger.info('------------');
     errCb.listErrors();
     errCb.clearErrors();
     events.emit('start analysis', {options: event.options}, errCb);
@@ -204,7 +163,7 @@ events.on('all csv processing complete', function (event, errCb) {
 
 events.on('start analysis', function (event, errCb) {
     var options = event.options;
-    doForEveryDate(options, options.analysisPause, function (dt, counter, total) {
+    mu.doForEveryDate(calendar, options.fromDate, options.toDate, options.analysisPause, function (dt, counter, total) {
         events.emit('analyze date', {
             date: dt,
             options: options,
@@ -222,23 +181,26 @@ events.on('analyze date', function (event, errCb) {
         if (err) {
             errCb.reportError(new Error('MongoQueryError: ' + JSON.stringify({err: err, date: dt})));
         }
-        //iterate over docs and put them in tickerSeries
-        var total = docs.length;
-        var counter = 1;
-        var cdt = calendar.date(event.date);
-        docs.forEach(function (doc) {
-            events.emit('analyze ticker for date', {
-                date: cdt,
-                options: event.options,
-                counter: counter,
-                total: total,
-                dateCounter: event.counter,
-                dateTotal: event.total,
-                dateStartTime: event.startTime,
-                ticker: doc
-            }, errCb);
-            counter += 1;
-        });
+        if (docs) {
+            var total = docs.length;
+            var counter = 1;
+            var cdt = calendar.date(event.date);
+            docs.forEach(function (doc) {
+                events.emit('analyze ticker for date', {
+                    date: cdt,
+                    options: event.options,
+                    counter: counter,
+                    total: total,
+                    dateCounter: event.counter,
+                    dateTotal: event.total,
+                    dateStartTime: event.startTime,
+                    ticker: doc
+                }, errCb);
+                counter += 1;
+            });
+        } else {
+            errCb.reportError(new Error('MongoQueryError: ' + JSON.stringify({err: 'did not find any documents', date: dt})));
+        }
         //event.endTime = +new Date();
         //logger.info('analyze date ' + dt + ' started.' + total + ' tickers to analyze further. ' + event.counter + ' of ' + event.total + ' took ' + (event.endTime - event.startTime) + ' ms');
     });
@@ -274,41 +236,53 @@ events.on('analyze ticker for date', function (event, errCb) {
                 series: ticker.series
             })));
         }
-        docs.forEach(function (doc) {
-            if (mu.areEqual(doc.date, cdt.prevDate)) {
-                ticker.yest = getPrevDoc(ticker, doc);
-                missing = missing.replace('yest,', '');
-            } else if (mu.areEqual(doc.date, cdt.prevWeek)) {
-                ticker.weekAgo = getPrevDoc(ticker, doc);
-                missing = missing.replace('weekAgo,', '');
-            } else if (mu.areEqual(doc.date, cdt.prevMonth)) {
-                ticker.monthAgo = getPrevDoc(ticker, doc);
-                missing = missing.replace('monthAgo,', '');
-            } else if (mu.areEqual(doc.date, cdt.prevQuarter)) {
-                ticker.quarterAgo = getPrevDoc(ticker, doc);
-                missing = missing.replace('quarterAgo,', '');
-            } else if (mu.areEqual(doc.date, cdt.prevHalfYear)) {
-                ticker.sixMonthsAgo = getPrevDoc(ticker, doc);
-                missing = missing.replace('sixMonthsAgo,', '');
-            } else if (mu.areEqual(doc.date, cdt.prevYear)) {
-                ticker.yearAgo = getPrevDoc(ticker, doc);
-                missing = missing.replace('yearAgo,', '');
+        if (docs) {
+            docs.forEach(function (doc) {
+                if (mu.areEqual(doc.date, cdt.prevDate)) {
+                    ticker.yest = getPrevDoc(ticker, doc);
+                    missing = missing.replace('yest,', '');
+                } else if (mu.areEqual(doc.date, cdt.prevWeek)) {
+                    ticker.weekAgo = getPrevDoc(ticker, doc);
+                    missing = missing.replace('weekAgo,', '');
+                } else if (mu.areEqual(doc.date, cdt.prevMonth)) {
+                    ticker.monthAgo = getPrevDoc(ticker, doc);
+                    missing = missing.replace('monthAgo,', '');
+                } else if (mu.areEqual(doc.date, cdt.prevQuarter)) {
+                    ticker.quarterAgo = getPrevDoc(ticker, doc);
+                    missing = missing.replace('quarterAgo,', '');
+                } else if (mu.areEqual(doc.date, cdt.prevHalfYear)) {
+                    ticker.sixMonthsAgo = getPrevDoc(ticker, doc);
+                    missing = missing.replace('sixMonthsAgo,', '');
+                } else if (mu.areEqual(doc.date, cdt.prevYear)) {
+                    ticker.yearAgo = getPrevDoc(ticker, doc);
+                    missing = missing.replace('yearAgo,', '');
+                }
+            });
+            if (missing !== '') {
+                ticker.missing = missing;
             }
-        });
-        if (missing !== '') {
-            ticker.missing = missing;
+            prices.findAndModify({
+                date: cdt.date,
+                symbol: ticker.symbol,
+                series: ticker.series
+            }, [['_id', 'asc']], ticker, {upsert: true}, function (err, doc) {
+                if (err) {
+                    errCb.reportError(new Error('MongoUpdateTickerError: ' + JSON.stringify({
+                        err: err,
+                        record: ticker
+                    })));
+                }
+            });
+            event.endTime = +new Date();
+            //logger.info('analyze ticker ' + moment(cdt.date).format('YYYYMMDD') + ':' + ticker.symbol + ':' + ticker.series + ' completed. missing ' + missing + '. ' + event.counter + ' of ' + event.total + ' took ' + (event.endTime - event.startTime) + ' ms');
+        } else {
+            errCb.reportError(new Error('MongoHistoricQueryError: ' + JSON.stringify({
+                err: 'no documents found',
+                date: cdt.date,
+                symbol: ticker.symbol,
+                series: ticker.series
+            })));
         }
-        prices.findAndModify({
-            date: cdt.date,
-            symbol: ticker.symbol,
-            series: ticker.series
-        }, [['_id', 'asc']], ticker, {upsert: true}, function (err, doc) {
-            if (err) {
-                errCb.reportError(new Error('MongoUpdateTickerError: ' + JSON.stringify({err: err, record: ticker})));
-            }
-        });
-        event.endTime = +new Date();
-        logger.info('analyze ticker ' + moment(cdt.date).format('YYYYMMDD') + ':' + ticker.symbol + ':' + ticker.series + ' completed. missing ' + missing + '. ' + event.counter + ' of ' + event.total + ' took ' + (event.endTime - event.startTime) + ' ms');
     });
     if (event.counter === event.total) {
         events.emit('analyze date complete', {
@@ -323,13 +297,14 @@ events.on('analyze ticker for date', function (event, errCb) {
 });
 events.on('analyze date complete', function (event, errCb) {
     logger.info('analyze date ' + moment(event.date).format('YYYYMMDD') + ' completed. ' + event.counter + ' of ' + event.total + ' took ' + (event.endTime - event.startTime) + ' ms');
+    errCb.listErrors();
+    errCb.clearErrors();
     if (event.counter === event.total) {
         events.emit('all analyze date complete', event, errCb);
     }
 });
 events.on('all analyze date complete', function (event, errCb) {
     logger.info('all analysis complete');
-    logger.info('------------');
     errCb.listErrors();
     errCb.clearErrors();
     events.emit('all complete', {options: event.options}, errCb);
@@ -340,19 +315,9 @@ events.on('all complete', function (event, errCb) {
     setTimeout(function () {
         mongodb.close();
         logger.warn('Exiting now');
-    }, 600000);
+    }, 300000);
 });
 
-var opts = getProgramOpts(process.argv);
-calendar = new Calendar(opts.holidaysFile, opts.fromDate, opts.toDate);
 
-logger.info('running with options : ' + JSON.stringify(opts));
 events.emit('start analysis', {options: opts}, mu.handleError);
-mongoclient.connect(opts.mongouri, function (err, db) {
-    if (err) {
-        mu.handleError.reportError(new Error('MongoConnectionError: ' + JSON.stringify({err: err})));
-    }
-    mongodb = db;
-    logger.info('connected to mongo');
-});
 

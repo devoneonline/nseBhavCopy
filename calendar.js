@@ -3,8 +3,7 @@
 /*jslint vars: true, stupid: true */
 
 var fs = require('fs');
-var hackDateForTZ = require('./miscutils.js').hackDateForTZ;
-var deepFreeze = require('./miscutils.js').deepFreeze;
+var mu = require('./miscutils.js');
 var dateformat = require('dateformat');
 
 var weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -26,31 +25,32 @@ function isWeekday(date) {
 }
 
 function nextDate(date) {
-    return hackDateForTZ(new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1));
+    return mu.hackDateForTZ(new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1));
 }
 module.exports.nextDate = nextDate;
+
 function prevDate(date) {
-    return hackDateForTZ(new Date(date.getFullYear(), date.getMonth(), date.getDate() - 1));
+    return mu.hackDateForTZ(new Date(date.getFullYear(), date.getMonth(), date.getDate() - 1));
 }
 
 function prevWeek(date) {
-    return hackDateForTZ(new Date(date.getFullYear(), date.getMonth(), date.getDate() - 7));
+    return mu.hackDateForTZ(new Date(date.getFullYear(), date.getMonth(), date.getDate() - 7));
 }
 
 function prevMonth(date) {
-    return hackDateForTZ(new Date(date.getFullYear(), date.getMonth() - 1, date.getDate()));
+    return mu.hackDateForTZ(new Date(date.getFullYear(), date.getMonth() - 1, date.getDate()));
 }
 
 function prevQuarter(date) {
-    return hackDateForTZ(new Date(date.getFullYear(), date.getMonth() - 3, date.getDate()));
+    return mu.hackDateForTZ(new Date(date.getFullYear(), date.getMonth() - 3, date.getDate()));
 }
 
 function prevHalfYr(date) {
-    return hackDateForTZ(new Date(date.getFullYear(), date.getMonth() - 6, date.getDate()));
+    return mu.hackDateForTZ(new Date(date.getFullYear(), date.getMonth() - 6, date.getDate()));
 }
 
 function prevYear(date) {
-    return hackDateForTZ(new Date(date.getFullYear() - 1, date.getMonth(), date.getDate()));
+    return mu.hackDateForTZ(new Date(date.getFullYear() - 1, date.getMonth(), date.getDate()));
 }
 
 function isFirstDayOfWeek(isHoliday, date, prevDate) {
@@ -90,7 +90,7 @@ function isLastDayOfYear(isHoliday, date, nextDate) {
 
 function addDays(date, numberOfDays) {
     var dt = new Date(date);
-    return hackDateForTZ(new Date(dt.setDate(dt.getDate() + numberOfDays)));
+    return mu.hackDateForTZ(new Date(dt.setDate(dt.getDate() + numberOfDays)));
 }
 
 function thisWeekStart(date) {
@@ -110,29 +110,29 @@ function nextWeekStart(date) {
 }
 
 function thisMonthStart(yr, mt) {
-    return hackDateForTZ(new Date(yr, mt, 1));
+    return mu.hackDateForTZ(new Date(yr, mt, 1));
 }
 
 function thisMonthEnd(yr, mt) {
-    return hackDateForTZ(new Date(yr, mt + 1, 0));
+    return mu.hackDateForTZ(new Date(yr, mt + 1, 0));
 }
 
 function prevMonthEnd(yr, mt) {
-    return hackDateForTZ(new Date(yr, mt, 0));
+    return mu.hackDateForTZ(new Date(yr, mt, 0));
 }
 
 function nextMonthStart(yr, mt) {
-    return hackDateForTZ(new Date(yr, mt + 1, 1));
+    return mu.hackDateForTZ(new Date(yr, mt + 1, 1));
 }
 
 var thisQuarterStartMth = [0, 0, 0, 3, 3, 3, 6, 6, 6, 9, 9, 9];
 function thisQuarterStart(yr, mt) {
-    return hackDateForTZ(new Date(yr, thisQuarterStartMth[mt], 1));
+    return mu.hackDateForTZ(new Date(yr, thisQuarterStartMth[mt], 1));
 }
 
 var thisQuarterEndMth = [2, 2, 2, 5, 5, 5, 8, 8, 8, 11, 11, 11];
 function thisQuarterEnd(yr, mt) {
-    return hackDateForTZ(new Date(yr, thisQuarterEndMth[mt], 1));
+    return mu.hackDateForTZ(new Date(yr, thisQuarterEndMth[mt], 1));
 }
 
 var prevQuarterEndMth = [11, 11, 11, 2, 2, 2, 5, 5, 5, 8, 8, 8];
@@ -140,7 +140,7 @@ function prevQuarterEnd(yr, mt) {
     if (prevQuarterEndMth[mt] === 11) {
         yr = yr - 1;
     }
-    return hackDateForTZ(new Date(yr, prevQuarterEndMth[mt], 1));
+    return mu.hackDateForTZ(new Date(yr, prevQuarterEndMth[mt], 1));
 }
 
 var nextQuarterStartMth = [3, 3, 3, 6, 6, 6, 9, 9, 9, 0, 0, 0];
@@ -148,23 +148,23 @@ function nextQuarterStart(yr, mt) {
     if (nextQuarterStartMth[mt] === 0) {
         yr = yr + 1;
     }
-    return hackDateForTZ(new Date(yr, nextQuarterStartMth[mt], 1));
+    return mu.hackDateForTZ(new Date(yr, nextQuarterStartMth[mt], 1));
 }
 
 function thisYearStart(yr) {
-    return hackDateForTZ(new Date(yr, 0, 1));
+    return mu.hackDateForTZ(new Date(yr, 0, 1));
 }
 
 function thisYearEnd(yr) {
-    return hackDateForTZ(new Date(yr, 11, 31));
+    return mu.hackDateForTZ(new Date(yr, 11, 31));
 }
 
 function prevYearEnd(yr) {
-    return hackDateForTZ(new Date(yr - 1, 11, 31));
+    return mu.hackDateForTZ(new Date(yr - 1, 11, 31));
 }
 
 function nextYearStart(yr) {
-    return hackDateForTZ(new Date(yr + 1, 0, 1));
+    return mu.hackDateForTZ(new Date(yr + 1, 0, 1));
 }
 
 var Calendar = function (holidaysFile, fromDate, toDate) {
@@ -172,7 +172,7 @@ var Calendar = function (holidaysFile, fromDate, toDate) {
     self.holidays = {};
     self.dates = {};
     var holidaysDts = fs.readFileSync(holidaysFile).toString().split("\n").map(function (date) {
-        return hackDateForTZ(new Date(Date.parse(date)));
+        return mu.hackDateForTZ(new Date(Date.parse(date)));
     });
     holidaysDts.forEach(function (dt) {
         self.holidays[dt] = true;
@@ -192,9 +192,9 @@ Calendar.prototype._adjBk = function (date) {
     var self = this;
     var ret;
     if (self._isHoliday(date)) {
-        var dt = hackDateForTZ(new Date(date));
+        var dt = mu.hackDateForTZ(new Date(date));
         while (self._isHoliday(dt)) {
-            dt = hackDateForTZ(new Date(dt.setDate(dt.getDate() - 1)));
+            dt = mu.hackDateForTZ(new Date(dt.setDate(dt.getDate() - 1)));
         }
         ret = dt;
     } else {
@@ -207,11 +207,11 @@ Calendar.prototype._adjFwd = function (date) {
     var self = this;
     var ret;
     if (self._isHoliday(date)) {
-        var dt = hackDateForTZ(new Date(date));
+        var dt = mu.hackDateForTZ(new Date(date));
         while (self._isHoliday(dt)) {
-            dt = hackDateForTZ(new Date(dt.setDate(dt.getDate() + 1)));
+            dt = mu.hackDateForTZ(new Date(dt.setDate(dt.getDate() + 1)));
         }
-        ret = hackDateForTZ(dt);
+        ret = mu.hackDateForTZ(dt);
     } else {
         ret = date;
     }
@@ -229,7 +229,7 @@ Calendar.prototype.enrich = function (dt) {
     var yr = date.getFullYear();
     var mt = date.getMonth();
     var ret = {
-        date: hackDateForTZ(new Date(date)),
+        date: mu.hackDateForTZ(new Date(date)),
         dayOfWeek: dayOfWeek(date),
         isWeekend: isWeekend(date),
         isWeekday: isWeekday(date),
@@ -267,13 +267,13 @@ Calendar.prototype.enrich = function (dt) {
         prevYearEnd: self._adjBk(prevYearEnd(yr)),
         nextYearStart: self._adjFwd(nextYearStart(yr))
     };
-    return deepFreeze(ret);
+    return mu.deepFreeze(ret);
 };
 
 Calendar.prototype._getAllDates = function (fromDate, toDate) {
     var self = this;
-    var endDate = hackDateForTZ(new Date(toDate));
-    var startDate = hackDateForTZ(new Date(fromDate));
+    var endDate = mu.hackDateForTZ(new Date(toDate));
+    var startDate = mu.hackDateForTZ(new Date(fromDate));
     var date = startDate;
     var datesQueue = [];
     while (date <= endDate) {
@@ -285,12 +285,12 @@ Calendar.prototype._getAllDates = function (fromDate, toDate) {
 
 Calendar.prototype._date = function (y, m, d) {
     var self = this;
-    return self.dates[hackDateForTZ(new Date(y, m, d))];
+    return self.dates[mu.hackDateForTZ(new Date(y, m, d))];
 };
 
 Calendar.prototype.date = function (dt) {
     var self = this;
-    return self.dates[hackDateForTZ(new Date(dt.getFullYear(), dt.getMonth(), dt.getDate()))];
+    return self.dates[mu.hackDateForTZ(new Date(dt.getFullYear(), dt.getMonth(), dt.getDate()))];
 };
 
 module.exports.Calendar = Calendar;

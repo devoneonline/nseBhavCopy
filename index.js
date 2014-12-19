@@ -4,321 +4,180 @@
 
 var getProgramOpts = require('./options.js').getProgramOpts;
 var Calendar = require('./calendar.js').Calendar;
-var mongoclient = require('mongodb').MongoClient;
-var mu = require('./miscutils.js');
-var events = new (require('events').EventEmitter)();
-var moment = require('moment');
+var nextDate = require('./calendar.js').nextDate;
+var bhavcopy2 = require('./bhavcopy2.js');
+var prices = require('./prices.js');
+var analyzer = require('./analyze.js');
+var handleError = require('./miscutils.js').handleError;
 var logger = require('./logger.js');
-var Bhavcopy = require('./bhavcopy.js').Bhavcopy;
-
-var retries = [];
-var mongodb;
+var mongoclient = require('mongodb').MongoClient;
+var moment = require('moment');
+var promise = require('when').promise;
+var unfold = require('when').unfold;
+var settle = require('when').settle;
 
 var opts = getProgramOpts(process.argv);
 var calendar = new Calendar(opts.holidaysFile, opts.fromDate, opts.toDate);
+var total = moment(opts.toDate).diff(moment(opts.fromDate), 'days') + 1;
+var counter = 1;
 
+function forAllRecords(params, fnToCall, counterToUpdate) {
+    return promise(function (resolve, reject, notify) {
+        params[counterToUpdate] = 0;
+        params.records2 = [];
+        settle(params.records.map(function (record) {
+            return fnToCall(params.collection, record, params.cdt);
+        })).then(function (descriptors) {
+            descriptors.forEach(function (descriptor) {
+                if (descriptor.state === 'fulfilled') {
+                    params[counterToUpdate] += 1;
+                    params.records2.push(descriptor.value);
+                } else {
+                    params.errors.push(descriptor.reason);
+                }
+            });
+        }).finally(function () {
+            params.records = params.records2;
+            params.records2 = [];
+            delete params.records2;
+            if (params[counterToUpdate] === 1) {
+                reject(params);
+            } else {
+                resolve(params);
+            }
+        }).done();
+    });
+}
+
+function save(params) {
+    params.saveStartTime = moment();
+    return forAllRecords(params, prices.savePrice, 'totalDocs');
+}
+
+function analyze(params) {
+    params.analyzeStartTime = moment();
+    return forAllRecords(params, analyzer.analyzeTicker, 'totalTickers');
+}
+
+function progress(params, actions, action, status, obj, msg) {
+    var formatstr = 'YYYY.MM.DD.hh.mm.ss.SSS';
+    params[action + 'EndTime'] = moment();
+    actions.push({
+        action: action,
+        status: status,
+        startTime: params[action + 'StartTime'].format(formatstr),
+        endTime: params[action + 'EndTime'].format(formatstr),
+        errors: params.errors
+    });
+    if (params.errors && params.errors.length > 0) {
+        logger.warn(JSON.stringify(params.errors));
+        status = status + ' with errors';
+    }
+    params.errors = [];
+    logger.info(params.fdt + ':(' + params.counter + ' of ' + params.total + '): ' + action + ': ' +  obj +  ': ' + msg + ': ' + status + ': took ' + params[action + 'EndTime'].diff(params[action + 'StartTime']) + ' ms');
+}
+
+function handleError(params, actions, e) {
+    return promise(function (resolve, reject, notify) {
+        handleError.reportError(e);
+        logger.warn(JSON.stringify(actions));
+        logger.warn(JSON.stringify(params));
+        resolve(e);
+    });
+}
+
+function doForEveryDate(params) {
+    params.allStartTime = moment();
+    var actions = [];
+    return promise(function (resolve, reject, notify) {
+        if (params.cdt.isHoliday) {
+            progress(params, actions, 'all', 'skipped', '', 'isWeekend: ' + params.cdt.isWeekend + ', isHoliday: ' + params.cdt.isHoliday);
+            resolve(params);
+        } else {
+            bhavcopy2.download(params)
+                .tap(function () {
+                    progress(params, actions, 'download', 'completed', params.uri, 'zipfilesize: ' + params.zipFileSize + ' bytes');
+                })
+                .then(bhavcopy2.unzip)
+                .tap(function () {
+                    progress(params, actions, 'unzip', 'completed', params.zipFileName, 'csvfilesize: ' + params.csvFileSize + ' bytes');
+                })
+                .then(bhavcopy2.parse)
+                .tap(function () {
+                    progress(params, actions, 'parse', 'completed', params.csvFileName, 'csvrecords: ' + params.totalRecords + ' lines');
+                })
+                .then(save)
+                .tap(function () {
+                    progress(params, actions, 'save', 'completed', params.db + '/' + params.collection, 'mongodocs: ' + params.totalDocs + ' docs');
+                })
+                .then(analyze)
+                .tap(function () {
+                    progress(params, actions, 'analyze', 'completed', params.db + '/' + params.collection, 'tickers: ' + params.totalTickers + ' docs');
+                })
+                .catch(function (e) {
+                    handleError(params, actions, e);
+                })
+                .finally(function () {
+                    progress(params, actions, 'all', 'completed', '', '');
+                    params.records = [];
+                    params.errors = [];
+                    actions = [];
+                    handleError.listErrors();
+                    handleError.clearErrors();
+                    delete params.records;
+                    delete params.errors;
+                    delete params.fdt;
+                    delete params.cdt;
+                    resolve(params);
+                })
+                .done();
+        }
+    });
+}
+
+
+function nextDateToProcess(date) {
+    var cdt = calendar.date(date);
+    var params = {
+        date: cdt.date,
+        outputFolder: opts.outputFolder,
+        db: opts.mongodb,
+        collection: opts.mongocollection,
+        fdt: moment(cdt.date).format('YYYYMMDD'),
+        cdt: calendar.date(cdt.date),
+        counter: counter,
+        total: total
+    };
+    counter += 1;
+    return [params, nextDate(date)];
+}
+
+var toDatem = moment(opts.toDate);
+function untilToDate(date) {
+    return toDatem.diff(moment(date), 'days') < 0;
+}
+
+var mongodb;
 mongoclient.connect(opts.mongouri, function (err, db) {
     if (err) {
-        mu.handleError.reportError(new Error('MongoConnectionError: ' + JSON.stringify({err: err})));
+        handleError.reportError(new Error('MongoConnectionError: ' + JSON.stringify({err: err})));
     }
     mongodb = db;
+    prices.init(db);
+    analyzer.init(db);
     logger.info('connected to mongo');
 });
 
-events.on('start downloads', function (event, errCb) {
-    var options = event.options;
-    mu.doForEveryDate(calendar, options.fromDate, options.toDate, options.downloadPause, function (dt, counter, total) {
-        events.emit('download for date', {
-            bhavcopy: new Bhavcopy(dt, options.outputFolder),
-            options: options,
-            counter: counter,
-            total: total,
-            retryCount: 0
-        }, errCb);
-    });
-});
-events.on('download for date', function (event, errCb) {
-    var bhavcopy = event.bhavcopy,
-        retryCount = event.retryCount;
-    event.startTime = +new Date();
-    bhavcopy.download(function (filename) {
-        event.filename = filename;
-        event.endTime = +new Date();
-        events.emit('download complete', event, errCb);
-    }, function () {
-        event.retryCount += 1;
-        retries.push(event);
-    }, retryCount, errCb);
-});
-events.on('download complete', function (event, errCb) {
-    logger.info('download complete ', event.bhavcopy.zipfilename(), ' ' + event.counter + ' of ' + event.total + ' took ' + (event.endTime - event.startTime) + ' ms');
-    if (event.counter === event.total) {
-        //hopefully this is the last one;
-        events.emit('all downloads complete', event, errCb);
-    }
-});
-events.on('all downloads complete', function (event, errCb) {
-    logger.info('all downloads complete');
-    logger.warn('retrying failed downloads');
-    retries.forEach(function (evt) {
-        evt.startTime = +new Date();
-        events.emit('download for date', evt, errCb);
-    });
-    errCb.listErrors();
-    retries = [];
-    errCb.clearErrors();
-    events.emit('start unzip', {options: event.options}, errCb);
-});
-events.on('start unzip', function (event, errCb) {
-    var options = event.options;
-    mu.doForEveryDate(calendar, options.fromDate, options.toDate, options.unzipPause, function (dt, counter, total) {
-        events.emit('unzip', {
-            bhavcopy: new Bhavcopy(dt, options.outputFolder),
-            options: options,
-            counter: counter,
-            total: total,
-            retryCount: 0
-        }, errCb);
-    });
-});
-events.on('unzip', function (event, errCb) {
-    if (event.retryCount <= 1) {
-        event.startTime = +new Date();
-        var unzipped = event.bhavcopy.unzip(errCb);
-        event.endTime = +new Date();
-        logger.info('unzipped ' + event.bhavcopy.zipfilename() + ' ' + event.counter + ' of ' + event.total + ' took ' + (event.endTime - event.startTime) + ' ms');
-        if (unzipped.length === 0) {
-            retries.push(event);
-        } else {
-            event.unzipped = unzipped[0];
-        }
-        if (event.counter === event.total) {
-            //hopefully this is the last one;
-            events.emit('all unzip complete', event, errCb);
-        }
-    }
-});
-events.on('all unzip complete', function (event, errCb) {
-    logger.info('all unzip complete');
-    logger.warn('retrying failed unzips');
-    retries.forEach(function (evt) {
-        evt.retryCount += 1;
-        events.emit('unzip', evt, errCb);
-    });
-    errCb.listErrors();
-    retries = [];
-    errCb.clearErrors();
-    events.emit('start csv process', {options: event.options}, errCb);
-});
-events.on('start csv process', function (event, errCb) {
-    var options = event.options;
-    mu.doForEveryDate(calendar, options.fromDate, options.toDate, options.unzipPause, function (dt, counter, total) {
-        events.emit('process csv', {
-            bhavcopy: new Bhavcopy(dt, options.outputFolder),
-            options: options,
-            counter: counter,
-            total: total
-        }, errCb);
-    });
-});
-events.on('process csv', function (event, errCb) {
-    event.startTime = +new Date();
-    event.bhavcopy.parse(function (record) {
-        events.emit('save record', {date: event.date, record: record, options: event.options}, errCb);
-    }, function (count) {
-        event.count = count;
-        event.endTime = +new Date();
-        logger.info('csv processing complete ' + event.bhavcopy.csvfilename() + '. ' + event.count + ' records processed. file ' + event.counter + ' of ' + event.total + ' took ' + (event.endTime - event.startTime) + ' ms');
-        events.emit('csv parse complete', event, errCb);
-    }, errCb);
-});
-events.on('save record', function (event, errCb) {
-    var record = event.record;
-    var prices = mongodb.collection('prices');
-    prices.findAndModify({
-        date: record.date,
-        symbol: record.symbol,
-        series: record.series
-    }, [['_id', 'asc']], record, {upsert: true}, function (err, doc) {
-        if (err) {
-            errCb.reportError(new Error('MongoSaveError: ' + JSON.stringify({err: err, record: record})));
-        } else {
-            record._id = doc._id;
-        }
-    });
-});
-events.on('csv parse complete', function (event, errCb) {
-    if (event.counter === event.total) {
-        //hopefully this is the last one;
-        events.emit('all csv processing complete', event, errCb);
-    }
-});
-events.on('all csv processing complete', function (event, errCb) {
-    logger.info('all csv processing complete');
-    errCb.listErrors();
-    errCb.clearErrors();
-    events.emit('start analysis', {options: event.options}, errCb);
-});
-
-events.on('start analysis', function (event, errCb) {
-    var options = event.options;
-    mu.doForEveryDate(calendar, options.fromDate, options.toDate, options.analysisPause, function (dt, counter, total) {
-        events.emit('analyze date', {
-            date: dt,
-            options: options,
-            counter: counter,
-            total: total,
-            retryCount: 0
-        }, errCb);
-    });
-});
-events.on('analyze date', function (event, errCb) {
-    var dt = event.date;
-    event.startTime = +new Date();
-    var prices = mongodb.collection('prices');
-    prices.find({date: dt}, {sort: 'symbol'}).toArray(function (err, docs) {
-        if (err) {
-            errCb.reportError(new Error('MongoQueryError: ' + JSON.stringify({err: err, date: dt})));
-        }
-        if (docs) {
-            var total = docs.length;
-            var counter = 1;
-            var cdt = calendar.date(event.date);
-            docs.forEach(function (doc) {
-                events.emit('analyze ticker for date', {
-                    date: cdt,
-                    options: event.options,
-                    counter: counter,
-                    total: total,
-                    dateCounter: event.counter,
-                    dateTotal: event.total,
-                    dateStartTime: event.startTime,
-                    ticker: doc
-                }, errCb);
-                counter += 1;
-            });
-        } else {
-            errCb.reportError(new Error('MongoQueryError: ' + JSON.stringify({
-                err: 'did not find any documents',
-                date: dt
-            })));
-        }
-        //event.endTime = +new Date();
-        //logger.info('analyze date ' + dt + ' started.' + total + ' tickers to analyze further. ' + event.counter + ' of ' + event.total + ' took ' + (event.endTime - event.startTime) + ' ms');
-    });
-    //done;
-});
-function getPrevDoc(ticker, doc) {
-    return {
-        date: doc.date,
-        open: doc.open,
-        high: doc.high,
-        low: doc.low,
-        close: doc.close,
-        change: ticker.close - doc.close,
-        pctChg: (ticker.close - doc.close) / doc.close
-    };
-}
-events.on('analyze ticker for date', function (event, errCb) {
-    var cdt = event.date;
-    var ticker = event.ticker;
-    event.startTime = +new Date();
-    var prices = mongodb.collection('prices');
-    prices.find({
-        $or: [{date: cdt.prevDate}, {date: cdt.prevWeek}, {date: cdt.prevMonth}, {date: cdt.prevQuarter}, {date: cdt.prevHalfYear}, {date: cdt.prevYear}],
-        symbol: ticker.symbol,
-        series: ticker.series
-    }).toArray(function (err, docs) {
-        var missing = 'yest,weekAgo,monthAgo,quarterAgo,sixMonthsAgo,yearAgo,';
-        if (err) {
-            errCb.reportError(new Error('MongoHistoricQueryError: ' + JSON.stringify({
-                err: err,
-                date: cdt.date,
-                symbol: ticker.symbol,
-                series: ticker.series
-            })));
-        }
-        if (docs) {
-            docs.forEach(function (doc) {
-                if (mu.areEqual(doc.date, cdt.prevDate)) {
-                    ticker.yest = getPrevDoc(ticker, doc);
-                    missing = missing.replace('yest,', '');
-                } else if (mu.areEqual(doc.date, cdt.prevWeek)) {
-                    ticker.weekAgo = getPrevDoc(ticker, doc);
-                    missing = missing.replace('weekAgo,', '');
-                } else if (mu.areEqual(doc.date, cdt.prevMonth)) {
-                    ticker.monthAgo = getPrevDoc(ticker, doc);
-                    missing = missing.replace('monthAgo,', '');
-                } else if (mu.areEqual(doc.date, cdt.prevQuarter)) {
-                    ticker.quarterAgo = getPrevDoc(ticker, doc);
-                    missing = missing.replace('quarterAgo,', '');
-                } else if (mu.areEqual(doc.date, cdt.prevHalfYear)) {
-                    ticker.sixMonthsAgo = getPrevDoc(ticker, doc);
-                    missing = missing.replace('sixMonthsAgo,', '');
-                } else if (mu.areEqual(doc.date, cdt.prevYear)) {
-                    ticker.yearAgo = getPrevDoc(ticker, doc);
-                    missing = missing.replace('yearAgo,', '');
-                }
-            });
-            if (missing !== '') {
-                ticker.missing = missing;
-            }
-            prices.findAndModify({
-                date: cdt.date,
-                symbol: ticker.symbol,
-                series: ticker.series
-            }, [['_id', 'asc']], ticker, {upsert: true}, function (err, doc) {
-                if (err) {
-                    errCb.reportError(new Error('MongoUpdateTickerError: ' + JSON.stringify({
-                        err: err,
-                        record: ticker
-                    })));
-                }
-            });
-            event.endTime = +new Date();
-            //logger.info('analyze ticker ' + moment(cdt.date).format('YYYYMMDD') + ':' + ticker.symbol + ':' + ticker.series + ' completed. missing ' + missing + '. ' + event.counter + ' of ' + event.total + ' took ' + (event.endTime - event.startTime) + ' ms');
-        } else {
-            errCb.reportError(new Error('MongoHistoricQueryError: ' + JSON.stringify({
-                err: 'no documents found',
-                date: cdt.date,
-                symbol: ticker.symbol,
-                series: ticker.series
-            })));
-        }
-    });
-    if (event.counter === event.total) {
-        events.emit('analyze date complete', {
-            date: cdt.date,
-            options: event.options,
-            startTime: event.dateStartTime,
-            endTime: +new Date(),
-            counter: event.dateCounter,
-            total: event.dateTotal
-        }, errCb);
-    }
-});
-events.on('analyze date complete', function (event, errCb) {
-    logger.info('analyze date ' + moment(event.date).format('YYYYMMDD') + ' completed. ' + event.counter + ' of ' + event.total + ' took ' + (event.endTime - event.startTime) + ' ms');
-    errCb.listErrors();
-    errCb.clearErrors();
-    if (event.counter === event.total) {
-        events.emit('all analyze date complete', event, errCb);
-    }
-});
-events.on('all analyze date complete', function (event, errCb) {
-    logger.info('all analysis complete');
-    errCb.listErrors();
-    errCb.clearErrors();
-    events.emit('all complete', {options: event.options}, errCb);
-});
-
-events.on('all complete', function (event, errCb) {
-    logger.info('ALL DONE. sleeping');
+var startTime = moment();
+function shutDown() {
+    var endTime = moment();
+    logger.info(total + ' dates took ' + endTime.diff(startTime) + ' ms');
     setTimeout(function () {
+        logger.info('ALL DONE. sleeping');
         mongodb.close();
         logger.warn('Exiting now');
-    }, 300000);
-});
+    }, 1000);
+}
 
-events.emit('start analysis', {options: opts}, mu.handleError);
+unfold(nextDateToProcess, untilToDate, doForEveryDate, opts.fromDate).finally(shutDown).done();
 

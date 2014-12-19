@@ -38,6 +38,7 @@ function getProgramOpts(args) {
     parsed.toDate = parsed.toDate || defaultOptions.toDate;
     parsed.outputFolder = parsed.outputFolder || defaultOptions.outputFolder;
     parsed.holidaysFile = parsed.holidaysFile || defaultOptions.holidaysFile;
+    parsed.mongodb = (parsed.mongodb || defaultOptions.mongodb);
     parsed.mongouri = 'mongodb://' + (parsed.mongohost || defaultOptions.mongohost) + ':' + (parsed.mongoport || defaultOptions.mongoport) + '/' + (parsed.mongodb || defaultOptions.mongodb);
     parsed.mongocollection = parsed.mongocollection || defaultOptions.mongocollection;
     parsed.downloadPause = parsed.downloadPause || defaultOptions.downloadPause;

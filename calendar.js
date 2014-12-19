@@ -27,6 +27,7 @@ function isWeekday(date) {
 function nextDate(date) {
     return mu.hackDateForTZ(new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1));
 }
+
 module.exports.nextDate = nextDate;
 
 function prevDate(date) {

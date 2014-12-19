@@ -3,8 +3,6 @@
 /*jslint vars: true, stupid: true */
 
 var logger = require('./logger.js');
-var c = require('./calendar.js');
-var moment = require('moment');
 
 function errorCb() {
     var errors = [];
@@ -52,28 +50,6 @@ function deepFreeze(o) {
 }
 
 module.exports.deepFreeze = deepFreeze;
-
-function doForEveryDate(calendar, fromDate, toDate, pause, eventRaiser) {
-    var currDate = fromDate;
-    var counter = 1;
-    var total = moment(toDate).diff(moment(fromDate), 'days');
-    var id = setInterval(function () {
-        var dt = calendar.date(currDate);
-        if (counter <= total) {
-            if (dt.isWorkingDay) {
-                eventRaiser(dt.date, counter, total);
-            } else {
-                logger.info('skipping holiday ' + moment(dt.date).format('YYYYMMDD') + ' isWeekend: ' + dt.isWeekend + ' isHoliday: ' + dt.isHoliday);
-            }
-        } else {
-            clearInterval(id);
-        }
-        currDate = c.nextDate(currDate);
-        counter += 1;
-    }, pause);
-}
-
-module.exports.doForEveryDate = doForEveryDate;
 
 function hackedNewDate(y, m, d) {
     return hackDateForTZ(new Date(y, m, d));

@@ -1,6 +1,6 @@
 "use strict";
-/*jshint -W081 */
-/*jslint vars: true, stupid: true */
+/*jshint -W081, -W098*/
+/*jslint vars: true, stupid: true, unparam: true */
 
 var getProgramOpts = require('./options.js').getProgramOpts;
 var Calendar = require('./calendar.js').Calendar;
@@ -77,7 +77,7 @@ function progress(params, actions, action, status, obj, msg) {
     logger.info(params.fdt + ':(' + params.counter + ' of ' + params.total + '): ' + action + ': ' +  obj +  ': ' + msg + ': ' + status + ': took ' + params[action + 'EndTime'].diff(params[action + 'StartTime']) + ' ms');
 }
 
-function handleError(params, actions, e) {
+function onError(params, actions, e) {
     return promise(function (resolve, reject, notify) {
         handleError.reportError(e);
         logger.warn(JSON.stringify(actions));
@@ -115,7 +115,7 @@ function doForEveryDate(params) {
                     progress(params, actions, 'analyze', 'completed', params.db + '/' + params.collection, 'tickers: ' + params.totalTickers + ' docs');
                 })
                 .catch(function (e) {
-                    handleError(params, actions, e);
+                    onError(params, actions, e);
                 })
                 .finally(function () {
                     progress(params, actions, 'all', 'completed', '', '');

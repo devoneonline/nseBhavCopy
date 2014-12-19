@@ -1,6 +1,6 @@
 "use strict";
-/*jshint -W081 */
-/*jslint vars: true, stupid: true */
+/*jshint -W081, -W098 */
+/*jslint vars: true, stupid: true, unparam: true */
 
 var moment = require('moment');
 var promise = require('when').promise;

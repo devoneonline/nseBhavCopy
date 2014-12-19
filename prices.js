@@ -1,6 +1,6 @@
 "use strict";
-/*jshint -W081 */
-/*jslint vars: true, stupid: true */
+/*jshint -W081, -W098 */
+/*jslint vars: true, stupid: true, unparam: true */
 
 var mu = require('./miscutils.js');
 var moment = require('moment');

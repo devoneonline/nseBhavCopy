@@ -1,6 +1,6 @@
 "use strict";
-/*jshint -W081 */
-/*jslint vars: true, stupid: true */
+/*jshint -W081, -W098*/
+/*jslint vars: true, stupid: true, unparam: true */
 
 var mu = require('./miscutils.js');
 var when = require('when');
@@ -26,7 +26,7 @@ function getPrevDoc(ticker, doc) {
 }
 
 function analyzeTicker(collection, price, cdt) {
-    var promise = when.promise(function (resolve, reject, notify) {
+    return when.promise(function (resolve, reject, notify) {
         var prices = mongodb.collection(collection);
         prices.find({
             $or: [{date: cdt.prevDate}, {date: cdt.prevWeek}, {date: cdt.prevMonth}, {date: cdt.prevQuarter}, {date: cdt.prevHalfYear}, {date: cdt.prevYear}, {date: cdt.prev3Year}, {date: cdt.prev5Year}],
@@ -92,6 +92,5 @@ function analyzeTicker(collection, price, cdt) {
             }
         });
     });
-    return promise;
 }
 module.exports.analyzeTicker = analyzeTicker;

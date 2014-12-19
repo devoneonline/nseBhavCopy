@@ -49,7 +49,7 @@ function getProgramOpts(args) {
     parsed.toDate = mu.hackDateForTZ(parsed.toDate);
     parsed.pid = process.pid;
     delete parsed.argv;
-    logger.info('running with options : ' + JSON.stringify(parsed));
+    logger.info('running with options : ' + mu.stringify(parsed));
     return parsed;
 }
 

@@ -8,6 +8,7 @@ var request = require('request-promise');
 var fs = require('fs');
 var Zip = require('adm-zip');
 var csv = require('fast-csv');
+var mu = require('./miscutils.js');
 
 function download(params) {
     params.downloadStartTime = moment();
@@ -35,15 +36,15 @@ function download(params) {
                 params.zipFileSize = stats.size;
                 resolve(params);
             } else {
-                reject(new Error('DownloadError: ' + JSON.stringify({
+                reject(mu.newErrorObj('DownloadError: ', {
                     filename: params.zipFileName,
                     err: 'file does not exist or less than 100 bytes.',
                     exists: exists,
                     stats: stats
-                })));
+                }));
             }
         }).catch(function (e) {
-            reject(new Error('DownloadError: ' + JSON.stringify({filename: params.zipFileName, err: e})));
+            reject(mu.newErrorObj('DownloadError: ', {filename: params.zipFileName, err: e}));
         });
     });
 }
@@ -70,13 +71,13 @@ function unzip(params) {
                 params.csvFileName = csvfilename;
                 resolve(params);
             } else {
-                reject(new Error('UnzipError: ' + JSON.stringify({
+                reject(mu.newErrorObj('UnzipError: ', {
                     filename: params.zipFileName,
                     err: 'could not unzip'
-                })));
+                }));
             }
         } catch (err) {
-            reject(new Error('UnzipError: ' + JSON.stringify({filename: params.zipFileName, error: err})));
+            reject(mu.newErrorObj('UnzipError: ', {filename: params.zipFileName, error: err}));
         }
     });
 }
@@ -104,10 +105,10 @@ function parse(params) {
                 tickers = {};
                 resolve(params);
             }).on('error', function (err) {
-                reject(new Error('CSVError: ' + JSON.stringify({filename: params.csvFileName, err: err})));
+                reject(mu.newErrorObj('CSVError: ', {filename: params.csvFileName, err: err}));
             });
         } catch (err) {
-            reject(new Error('CSVOpenError: ' + JSON.stringify({filename: params.csvFileName, err: err})));
+            reject(mu.newErrorObj('CSVOpenError: ', {filename: params.csvFileName, err: err}));
         }
     });
 }

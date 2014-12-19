@@ -10,6 +10,7 @@ var prices = require('./prices.js');
 var analyzer = require('./analyze.js');
 var handleError = require('./miscutils.js').handleError;
 var newErrorObj = require('./miscutils.js').newErrorObj;
+var stringify = require('./miscutils.js').stringify;
 var logger = require('./logger.js');
 var mongoclient = require('mongodb').MongoClient;
 var moment = require('moment');
@@ -71,7 +72,7 @@ function progress(params, actions, action, status, obj, msg) {
         errors: params.errors
     });
     if (params.errors && params.errors.length > 0) {
-        logger.warn(JSON.stringify({errors: params.errors}).replace(/\"/g, ''));
+        logger.warn(stringify({errors: params.errors}));
         status = status + ' with errors';
     }
     params.errors = [];
@@ -81,8 +82,8 @@ function progress(params, actions, action, status, obj, msg) {
 function onError(params, actions, e) {
     return promise(function (resolve, reject, notify) {
         handleError.reportError(e);
-        logger.warn(JSON.stringify(actions).replace(/\"/g, ''));
-        logger.warn(JSON.stringify(params).replace(/\"/g, ''));
+        logger.warn(stringify(actions));
+        logger.warn(stringify(params));
         resolve(e);
     });
 }

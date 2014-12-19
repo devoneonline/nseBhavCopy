@@ -57,9 +57,16 @@ function hackedNewDate(y, m, d) {
 
 module.exports.hackedNewDate = hackedNewDate;
 
+function stringify(obj) {
+    return JSON.stringify(obj).replace(/\"/g, '');
+}
+
+module.exports.stringify = stringify;
+
 function newErrorObj(mainMessage, otherParams) {
     mainMessage = mainMessage || ' ';
-    return new Error(mainMessage + JSON.stringify(otherParams).replace(/\"/g, ''));
+    return new Error(mainMessage + stringify(otherParams));
 }
 
 module.exports.newErrorObj = newErrorObj;
+

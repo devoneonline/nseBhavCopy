@@ -25,7 +25,6 @@ mongoclient.connect(opts.mongouri, function (err, db) {
     logger.info('connected to mongo');
 });
 
-
 events.on('start downloads', function (event, errCb) {
     var options = event.options;
     mu.doForEveryDate(calendar, options.fromDate, options.toDate, options.downloadPause, function (dt, counter, total) {
@@ -199,7 +198,10 @@ events.on('analyze date', function (event, errCb) {
                 counter += 1;
             });
         } else {
-            errCb.reportError(new Error('MongoQueryError: ' + JSON.stringify({err: 'did not find any documents', date: dt})));
+            errCb.reportError(new Error('MongoQueryError: ' + JSON.stringify({
+                err: 'did not find any documents',
+                date: dt
+            })));
         }
         //event.endTime = +new Date();
         //logger.info('analyze date ' + dt + ' started.' + total + ' tickers to analyze further. ' + event.counter + ' of ' + event.total + ' took ' + (event.endTime - event.startTime) + ' ms');
@@ -317,7 +319,6 @@ events.on('all complete', function (event, errCb) {
         logger.warn('Exiting now');
     }, 300000);
 });
-
 
 events.emit('start analysis', {options: opts}, mu.handleError);
 

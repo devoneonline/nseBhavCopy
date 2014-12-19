@@ -4,11 +4,14 @@ var mu = require('./miscutils.js');
 var logger = require('./logger.js');
 
 var defaultOptions = {
-    fromDate: new Date(Date.parse('2012-04-01')),
-    toDate: new Date(Date.parse('2014-11-04')),
+    fromDate: new Date(Date.parse('2014-12-04')),
+    toDate: new Date(Date.parse('2014-12-17')),
     outputFolder: 'f:/projects/data/nseData',
     holidaysFile: './holidays.txt',
-    monoguri: 'mongodb://localhost:27017/test',
+    mongohost: 'localhost',
+    mongoport: '27017',
+    mongodb: 'test',
+    mongocollection: 'prices',
     downloadPause: 2000,
     unzipPause: 100,
     parsePause: 1000,
@@ -21,7 +24,10 @@ function getProgramOpts(args) {
             'toDate': Date,
             'outputFolder': String,
             'holidaysFile': String,
-            'mongouri': String,
+            'mongohost': String,
+            'mongoport': String,
+            'mongodb': String,
+            'mongocollection': String,
             'downloadPause': Number,
             'unzipPause': Number,
             'parsePause': Number,
@@ -32,7 +38,8 @@ function getProgramOpts(args) {
     parsed.toDate = parsed.toDate || defaultOptions.toDate;
     parsed.outputFolder = parsed.outputFolder || defaultOptions.outputFolder;
     parsed.holidaysFile = parsed.holidaysFile || defaultOptions.holidaysFile;
-    parsed.mongouri = parsed.mongouri || defaultOptions.monoguri;
+    parsed.mongouri = 'mongodb://' + (parsed.mongohost || defaultOptions.mongohost) + ':' + (parsed.mongoport || defaultOptions.mongoport) + '/' + (parsed.mongodb || defaultOptions.mongodb);
+    parsed.mongocollection = parsed.mongocollection || defaultOptions.mongocollection;
     parsed.downloadPause = parsed.downloadPause || defaultOptions.downloadPause;
     parsed.unzipPause = parsed.unzipPause || defaultOptions.unzipPause;
     parsed.parsePause = parsed.parsePause || defaultOptions.parsePause;

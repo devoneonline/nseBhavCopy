@@ -6,7 +6,6 @@ var logger = require('./logger.js');
 var c = require('./calendar.js');
 var moment = require('moment');
 
-
 function errorCb() {
     var errors = [];
     return {

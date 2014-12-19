@@ -4,7 +4,7 @@
 
 var fs = require('fs');
 var mu = require('./miscutils.js');
-var dateformat = require('dateformat');
+var moment = require('moment');
 
 var weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 var daysToAddForThisWeekStart = [1, 0, -1, -2, -3, -4, -5, -6];
@@ -53,12 +53,20 @@ function prevYear(date) {
     return mu.hackDateForTZ(new Date(date.getFullYear() - 1, date.getMonth(), date.getDate()));
 }
 
+function prev3Year(date) {
+    return mu.hackDateForTZ(new Date(date.getFullYear() - 3, date.getMonth(), date.getDate()));
+}
+
+function prev5Year(date) {
+    return mu.hackDateForTZ(new Date(date.getFullYear() - 5, date.getMonth(), date.getDate()));
+}
+
 function isFirstDayOfWeek(isHoliday, date, prevDate) {
-    return !isHoliday && dateformat(date, "W") > dateformat(prevDate, "W");
+    return !isHoliday && moment(date).format("W") > moment(prevDate).format("W");
 }
 
 function isLastDayOfWeek(isHoliday, date, nextDate) {
-    return !isHoliday && dateformat(date, "W") < dateformat(nextDate, "W");
+    return !isHoliday && moment(date).format("W") < moment(nextDate).format("W");
 }
 function isFirstDayOfMonth(isHoliday, date, prevDate) {
     return !isHoliday && date.getMonth() !== prevDate.getMonth();
@@ -185,7 +193,7 @@ var Calendar = function (holidaysFile, fromDate, toDate) {
 
 Calendar.prototype._isHoliday = function (date) {
     var self = this;
-    return self.holidays[date] === true;
+    return self.holidays[date] === true || moment(date).format('d') === 0 || moment(date).format('d') === 6;
 };
 
 Calendar.prototype._adjBk = function (date) {
@@ -242,6 +250,8 @@ Calendar.prototype.enrich = function (dt) {
         prevQuarter: self._adjBk(prevQuarter(date)),
         prevHalfYear: self._adjBk(prevHalfYr(date)),
         prevYear: self._adjBk(prevYear(date)),
+        prev3Year: self._adjBk(prev3Year(date)),
+        prev5Year: self._adjBk(prev5Year(date)),
         isFirstDayOfWeek: isFirstDayOfWeek(isHoliday, date, adjPrevDt),
         isLastDayOfWeek: isLastDayOfWeek(isHoliday, date, adjNextDt),
         isFirstDayOfMonth: isFirstDayOfMonth(isHoliday, date, adjPrevDt),

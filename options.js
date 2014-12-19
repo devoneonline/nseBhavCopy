@@ -4,7 +4,7 @@ var mu = require('./miscutils.js');
 var logger = require('./logger.js');
 
 var defaultOptions = {
-    fromDate: new Date(Date.parse('2014-12-04')),
+    fromDate: new Date(Date.parse('2014-12-16')),
     toDate: new Date(Date.parse('2014-12-17')),
     outputFolder: 'f:/projects/data/nseData',
     holidaysFile: './holidays.txt',

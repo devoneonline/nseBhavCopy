@@ -3,7 +3,9 @@
 /*jslint vars: true, stupid: true, unparam: true */
 
 var mu = require('./miscutils.js');
-var when = require('when');
+var promise = require('when').promise;
+var settle = require('when').settle;
+var moment = require('moment');
 
 var mongodb;
 
@@ -25,72 +27,65 @@ function getPrevDoc(ticker, doc) {
     };
 }
 
-function analyzeTicker(collection, price, cdt) {
-    return when.promise(function (resolve, reject, notify) {
+function analyzeTickerForPrevDate(collection, price, prevDate, tagToUpdate) {
+    return promise(function (resolve, reject, notify) {
         var prices = mongodb.collection(collection);
-        prices.find({
-            $or: [{date: cdt.prevDate}, {date: cdt.prevWeek}, {date: cdt.prevMonth}, {date: cdt.prevQuarter}, {date: cdt.prevHalfYear}, {date: cdt.prevYear}, {date: cdt.prev3Year}, {date: cdt.prev5Year}],
+        prices.findOne({
+            date: prevDate,
             symbol: price.symbol,
             series: price.series
-        }).toArray(function (err, docs) {
-            var missing = 'yest,weekAgo,monthAgo,quarterAgo,sixMonthsAgo,yearAgo,threeYearsAgo,fiveYearsAgo';
-            if (err) {
-                reject(new Error('MongoHistoricQueryError: ' + JSON.stringify({
-                    err: err,
-                    id: price.identity
-                })));
+        }, {fields: {date: 1, open: 1, high: 1, low: 1, close: 1}}, function (err, doc) {
+            if (err || doc === null || doc === undefined) {
+                reject(mu.newErrorObj(err, {
+                    couldNotFind: tagToUpdate + ':' + moment(prevDate).format('YYYYMMDD')
+                }));
+            } else {
+                price.missing = price.missing.replace(tagToUpdate + ',', '');
+                price[tagToUpdate] = getPrevDoc(price, doc);
+                resolve(price);
             }
-            if (docs) {
-                docs.forEach(function (doc) {
-                    if (mu.areEqual(doc.date, cdt.prevDate)) {
-                        price.yest = getPrevDoc(price, doc);
-                        missing = missing.replace('yest,', '');
-                    } else if (mu.areEqual(doc.date, cdt.prevWeek)) {
-                        price.weekAgo = getPrevDoc(price, doc);
-                        missing = missing.replace('weekAgo,', '');
-                    } else if (mu.areEqual(doc.date, cdt.prevMonth)) {
-                        price.monthAgo = getPrevDoc(price, doc);
-                        missing = missing.replace('monthAgo,', '');
-                    } else if (mu.areEqual(doc.date, cdt.prevQuarter)) {
-                        price.quarterAgo = getPrevDoc(price, doc);
-                        missing = missing.replace('quarterAgo,', '');
-                    } else if (mu.areEqual(doc.date, cdt.prevHalfYear)) {
-                        price.sixMonthsAgo = getPrevDoc(price, doc);
-                        missing = missing.replace('sixMonthsAgo,', '');
-                    } else if (mu.areEqual(doc.date, cdt.prevYear)) {
-                        price.yearAgo = getPrevDoc(price, doc);
-                        missing = missing.replace('yearAgo,', '');
-                    } else if (mu.areEqual(doc.date, cdt.prev3Year)) {
-                        price.threeYearsAgo = getPrevDoc(price, doc);
-                        missing = missing.replace('threeYearsAgo,', '');
-                    } else if (mu.areEqual(doc.date, cdt.prev5Year)) {
-                        price.fiveYearsAgo = getPrevDoc(price, doc);
-                        missing = missing.replace('fiveYearsAgo,', '');
-                    }
-                });
-                if (missing !== '') {
-                    price.missing = missing;
+        });
+    });
+}
+
+function analyzeTicker(collection, price, cdt) {
+    return promise(function (resolve, reject, notify) {
+        price.missing = 'yest,weekAgo,monthAgo,quarterAgo,sixMonthsAgo,yearAgo,threeYearsAgo,fiveYearsAgo';
+        var prevDates = [{date: cdt.prevDate, tagToUpdate: 'yest'},
+            {date: cdt.prevWeek, tagToUpdate: 'weekAgo'},
+            {date: cdt.prevMonth, tagToUpdate: 'monthAgo'},
+            {date: cdt.prevQuarter, tagToUpdate: 'quarterAgo'},
+            {date: cdt.prevHalfYear, tagToUpdate: 'sixMonthsAgo'},
+            {date: cdt.prevYear, tagToUpdate: 'yearAgo'},
+            {date: cdt.prev3Year, tagToUpdate: 'threeYearsAgo'},
+            {date: cdt.prev5Year, tagToUpdate: 'fiveYearsAgo'}];
+        settle(prevDates.map(function (pd) {
+            return analyzeTickerForPrevDate(collection, price, pd.date, pd.tagToUpdate);
+        })).then(function (descriptors) {
+            var errcount = 0;
+            var reasons = [];
+            descriptors.forEach(function (descriptor) {
+                if (descriptor.state === 'rejected') {
+                    errcount += 1;
+                    reasons.push(descriptor.reason.toString().replace('Error: ', '').replace('couldNotFind:', '').replace(/\"/g, ''));
                 }
+            });
+            if (errcount >= 7) {
+                reject(mu.newErrorObj(price.identity, {couldNotFind: reasons}));
+            } else {
+                var prices = mongodb.collection(collection);
                 prices.findAndModify({
                     date: price.date,
                     symbol: price.symbol,
                     series: price.series
                 }, [['_id', 'asc']], price, {upsert: true}, function (err, doc) {
                     if (err) {
-                        reject(new Error('MongoUpdateTickerError: ' + JSON.stringify({
-                            err: err,
-                            id: price.identity
-                        })));
+                        reject(mu.newErrorObj('MongoUpdateTickerError: ', {err: err, id: price.identity}));
                     }
                     resolve(price);
                 });
-            } else {
-                reject(new Error('MongoHistoricQueryError: ' + JSON.stringify({
-                    err: 'no documents found',
-                    id: price.identity
-                })));
             }
-        });
+        }).done();
     });
 }
 module.exports.analyzeTicker = analyzeTicker;

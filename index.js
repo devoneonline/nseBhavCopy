@@ -9,6 +9,7 @@ var bhavcopy2 = require('./bhavcopy2.js');
 var prices = require('./prices.js');
 var analyzer = require('./analyze.js');
 var handleError = require('./miscutils.js').handleError;
+var newErrorObj = require('./miscutils.js').newErrorObj;
 var logger = require('./logger.js');
 var mongoclient = require('mongodb').MongoClient;
 var moment = require('moment');
@@ -33,7 +34,7 @@ function forAllRecords(params, fnToCall, counterToUpdate) {
                     params[counterToUpdate] += 1;
                     params.records2.push(descriptor.value);
                 } else {
-                    params.errors.push(descriptor.reason);
+                    params.errors.push(descriptor.reason.toString().replace(/\"/g, ''));
                 }
             });
         }).finally(function () {
@@ -70,7 +71,7 @@ function progress(params, actions, action, status, obj, msg) {
         errors: params.errors
     });
     if (params.errors && params.errors.length > 0) {
-        logger.warn(JSON.stringify(params.errors));
+        logger.warn(JSON.stringify({errors: params.errors}).replace(/\"/g, ''));
         status = status + ' with errors';
     }
     params.errors = [];
@@ -80,16 +81,16 @@ function progress(params, actions, action, status, obj, msg) {
 function onError(params, actions, e) {
     return promise(function (resolve, reject, notify) {
         handleError.reportError(e);
-        logger.warn(JSON.stringify(actions));
-        logger.warn(JSON.stringify(params));
+        logger.warn(JSON.stringify(actions).replace(/\"/g, ''));
+        logger.warn(JSON.stringify(params).replace(/\"/g, ''));
         resolve(e);
     });
 }
 
 function doForEveryDate(params) {
     params.allStartTime = moment();
-    var actions = [];
     return promise(function (resolve, reject, notify) {
+        var actions = [];
         if (params.cdt.isHoliday) {
             progress(params, actions, 'all', 'skipped', '', 'isWeekend: ' + params.cdt.isWeekend + ', isHoliday: ' + params.cdt.isHoliday);
             resolve(params);
@@ -160,7 +161,7 @@ function untilToDate(date) {
 var mongodb;
 mongoclient.connect(opts.mongouri, function (err, db) {
     if (err) {
-        handleError.reportError(new Error('MongoConnectionError: ' + JSON.stringify({err: err})));
+        handleError.reportError(newErrorObj('MongoConnectionError: ', {err: err}));
     }
     mongodb = db;
     prices.init(db);

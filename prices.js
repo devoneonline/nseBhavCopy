@@ -171,7 +171,7 @@ function savePrice(collection, data, cdt) {
             series: price.series
         }, [['_id', 'asc']], price, {upsert: true}, function (err, doc) {
             if (err) {
-                reject(new Error('MongoSaveError: ' + JSON.stringify({err: err, id: price.identity})));
+                reject(mu.newErrorObj('MongoSaveError: ', {err: err, id: price.identity}));
             } else {
                 price._id = doc._id;
             }

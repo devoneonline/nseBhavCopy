@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "start": "node ./index.js"
+    "start": "rm -f ./logs/*.log; node ./index.js"
   },
   "dependencies": {
     "adm-zip": "^0.4.4",

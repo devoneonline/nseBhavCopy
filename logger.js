@@ -6,7 +6,7 @@ var logger = new winston.Logger({
             filename: './logs/nseData' + process.pid + '.log',
             level: 'debug',
             handleExceptions: true,
-            json: true,
+            json: false,
             maxsize: 100000000,
             colorize: false,
             timestamp: true

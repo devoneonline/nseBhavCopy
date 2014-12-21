@@ -11,12 +11,10 @@ var csv = require('fast-csv');
 var mu = require('./miscutils.js');
 
 function download(params) {
-    params.downloadStartTime = moment();
-    var date = params.date;
-    params.zipFileName = params.outputFolder + '/' + params.fdt + '.csv.zip';
     return promise(function (resolve, reject, notify) {
         //http://stackoverflow.com/questions/14107470/nodejs-download-and-unzipBhavcopyCsv-file-from-url-error-no-end-header-found
-        var uri = 'http://www.nseindia.com/content/historical/EQUITIES/' + date.getFullYear() + "/" + moment(date).format('MMM').toUpperCase() + '/cm' + moment(date).format('DDMMMYYYY').toUpperCase() + 'bhav.csv.zip';
+        var uri = 'http://www.nseindia.com/content/historical/EQUITIES/' + params.date.getFullYear() + "/" + moment(params.date).format('MMM').toUpperCase() + '/cm' + moment(params.date).format('DDMMMYYYY').toUpperCase() + 'bhav.csv.zip';
+        params.zipFileName = params.outputFolder + '/' + params.fdt + '.csv.zip';
         params.uri = uri;
         request.get({
             //http://stackoverflow.com/questions/14855015/getting-binary-content-in-node-js-using-request
@@ -52,23 +50,20 @@ function download(params) {
 module.exports.download = download;
 
 function unzip(params) {
-    params.unzipStartTime = moment();
-    var folder = params.outputFolder;
-    var csvfilename = folder + '/' + params.fdt + '.csv';
     return promise(function (resolve, reject, notify) {
-        var zipfile;
+        var folder = params.outputFolder;
+        params.csvFileName = folder + '/' + params.fdt + '.csv';
         try {
-            zipfile = new Zip(params.zipFileName);
+            var zipfile = new Zip(params.zipFileName);
             var entryname = null;
             zipfile.getEntries().forEach(function (zipEntry) {
                 zipfile.extractEntryTo(zipEntry.entryName, folder, false, true);
                 entryname = folder + '\\' + zipEntry.entryName;
             });
             if (fs.existsSync(entryname)) {
-                fs.renameSync(entryname, csvfilename);
-                var stats = fs.statSync(csvfilename);
+                fs.renameSync(entryname, params.csvFileName);
+                var stats = fs.statSync(params.csvFileName);
                 params.csvFileSize = stats.size;
-                params.csvFileName = csvfilename;
                 resolve(params);
             } else {
                 reject(mu.newErrorObj('UnzipError: ', {
@@ -84,7 +79,6 @@ function unzip(params) {
 module.exports.unzip = unzip;
 
 function parse(params) {
-    params.parseStartTime = moment();
     return promise(function (resolve, reject, notify) {
         var lines = [];
         var tickers = {};

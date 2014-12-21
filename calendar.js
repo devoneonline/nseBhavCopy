@@ -227,14 +227,35 @@ Calendar.prototype._adjFwd = function (date) {
     return ret;
 };
 
+Calendar.prototype._adjFwdNextDate = function (date) {
+    var self = this;
+    return self._adjFwd(nextDate(date));
+};
+
+Calendar.prototype._adjBkPrevDate = function (date) {
+    var self = this;
+    return self._adjBk(prevDate(date));
+};
+
+Calendar.prototype._nearestPrevDates = function (date, prevFn, noOfDays) {
+    var self = this;
+    var dt = prevFn(date);
+    var ret = [];
+    var i = 0;
+    while (i < noOfDays) {
+        dt = mu.hackDateForTZ(new Date(self._adjBkPrevDate(dt)));
+        ret.push(dt);
+        i += 1;
+    }
+    return ret;
+};
+
 Calendar.prototype.enrich = function (dt) {
     var self = this;
     var date = new Date(dt);
     var isHoliday = self._isHoliday(date);
-    var prevDt = prevDate(date);
-    var adjPrevDt = self._adjBk(prevDt);
-    var nextDt = nextDate(date);
-    var adjNextDt = self._adjFwd(nextDt);
+    var adjPrevDt = self._adjBkPrevDate(date);
+    var adjNextDt = self._adjFwdNextDate(date);
     var yr = date.getFullYear();
     var mt = date.getMonth();
     var ret = {
@@ -246,13 +267,21 @@ Calendar.prototype.enrich = function (dt) {
         isHoliday: isHoliday,
         nextDate: adjNextDt,
         prevDate: adjPrevDt,
+        nearestPrevDates: self._nearestPrevDates(date, prevDate, 2),
         prevWeek: self._adjBk(prevWeek(date)),
+        nearestPrevWeek: self._nearestPrevDates(date, prevWeek, 2),
         prevMonth: self._adjBk(prevMonth(date)),
+        nearestPrevMonth: self._nearestPrevDates(date, prevMonth, 3),
         prevQuarter: self._adjBk(prevQuarter(date)),
+        nearestPrevQuarter: self._nearestPrevDates(date, prevMonth, 4),
         prevHalfYear: self._adjBk(prevHalfYr(date)),
+        nearestPrevHalfYear: self._nearestPrevDates(date, prevHalfYr, 4),
         prevYear: self._adjBk(prevYear(date)),
+        nearestPrevYear: self._nearestPrevDates(date, prevYear, 4),
         prev3Year: self._adjBk(prev3Year(date)),
+        nearestPrev3Year: self._nearestPrevDates(date, prev3Year, 4),
         prev5Year: self._adjBk(prev5Year(date)),
+        nearestPrev5Year: self._nearestPrevDates(date, prev5Year, 4),
         isFirstDayOfWeek: isFirstDayOfWeek(isHoliday, date, adjPrevDt),
         isLastDayOfWeek: isLastDayOfWeek(isHoliday, date, adjNextDt),
         isFirstDayOfMonth: isFirstDayOfMonth(isHoliday, date, adjPrevDt),
@@ -284,8 +313,7 @@ Calendar.prototype.enrich = function (dt) {
 Calendar.prototype._getAllDates = function (fromDate, toDate) {
     var self = this;
     var endDate = mu.hackDateForTZ(new Date(toDate));
-    var startDate = mu.hackDateForTZ(new Date(fromDate));
-    var date = startDate;
+    var date = mu.hackDateForTZ(new Date(fromDate));
     var datesQueue = [];
     while (date <= endDate) {
         datesQueue.push(self.enrich(date));

@@ -17,11 +17,32 @@ var moment = require('moment');
 var promise = require('when').promise;
 var unfold = require('when').unfold;
 var settle = require('when').settle;
+var when = require('when');
 
-var opts = getProgramOpts(process.argv);
-var calendar = new Calendar(opts.holidaysFile, opts.fromDate, opts.toDate);
-var total = moment(opts.toDate).diff(moment(opts.fromDate), 'days') + 1;
-var counter = 1;
+//TODO: hate globals but dont know good way to get rid of this yet
+var mongodb;
+
+function init(params) {
+    params.calendar = new Calendar(params.holidaysFile, params.fromDate, params.toDate);
+    params.counter = 1;
+    params.total = moment(params.toDate).diff(moment(params.fromDate), 'days') + 1;
+    return when.resolve(params);
+}
+
+function connect(params) {
+    return promise(function (resolve, reject, notify) {
+        mongoclient.connect(params.mongouri, function (err, db) {
+            if (err) {
+                reject(newErrorObj('MongoConnectionError: ', {err: err}));
+            }
+            mongodb = db;
+            prices.init(db);
+            analyzer.init(db);
+            logger.info('connected to mongo');
+            resolve(params);
+        });
+    });
+}
 
 function forAllRecords(params, fnToCall, counterToUpdate) {
     return promise(function (resolve, reject, notify) {
@@ -51,6 +72,36 @@ function forAllRecords(params, fnToCall, counterToUpdate) {
     });
 }
 
+function download(params) {
+    params.downloadStartTime = moment();
+    var ret;
+    if (params.actionsToPerform.indexOf('all') > -1 || params.actionsToPerform.indexOf('download') > -1) {
+        ret = when.resolve(bhavcopy2.download(params));
+    } else {
+        params.zipFileName = params.outputFolder + '/' + params.fdt + '.csv.zip';
+        params.uri = 'skipped';
+        ret = when.resolve(params);
+    }
+    return ret;
+}
+
+function unzip(params) {
+    params.unzipStartTime = moment();
+    var ret;
+    if (params.actionsToPerform.indexOf('all') > -1 || params.actionsToPerform.indexOf('unzip') > -1) {
+        ret = when.resolve(bhavcopy2.unzip(params));
+    } else {
+        params.csvFileName = params.outputFolder + '/' + params.fdt + '.csv';
+        params.zipFileName = 'skipped';
+        ret = when.resolve(params);
+    }
+    return ret;
+}
+
+function parse(params) {
+    params.parseStartTime = moment();
+    return bhavcopy2.parse(params);
+}
 function save(params) {
     params.saveStartTime = moment();
     return forAllRecords(params, prices.savePrice, 'totalDocs');
@@ -76,16 +127,14 @@ function progress(params, actions, action, status, obj, msg) {
         status = status + ' with errors';
     }
     params.errors = [];
-    logger.info(params.fdt + ':(' + params.counter + ' of ' + params.total + '): ' + action + ': ' +  obj +  ': ' + msg + ': ' + status + ': took ' + params[action + 'EndTime'].diff(params[action + 'StartTime']) + ' ms');
+    logger.info(params.fdt + ':(' + params.counter + ' of ' + params.total + '): ' + action + ': ' + obj + ': ' + msg + ': ' + status + ': took ' + params[action + 'EndTime'].diff(params[action + 'StartTime']) + ' ms');
 }
 
 function onError(params, actions, e) {
-    return promise(function (resolve, reject, notify) {
-        handleError.reportError(e);
-        logger.warn(stringify(actions));
-        logger.warn(stringify(params));
-        resolve(e);
-    });
+    handleError.reportError(e);
+    logger.warn(stringify(actions));
+    logger.warn(stringify(params));
+    when.resolve(e);
 }
 
 function doForEveryDate(params) {
@@ -96,15 +145,15 @@ function doForEveryDate(params) {
             progress(params, actions, 'all', 'skipped', '', 'isWeekend: ' + params.cdt.isWeekend + ', isHoliday: ' + params.cdt.isHoliday);
             resolve(params);
         } else {
-            bhavcopy2.download(params)
+            download(params)
                 .tap(function () {
                     progress(params, actions, 'download', 'completed', params.uri, 'zipfilesize: ' + params.zipFileSize + ' bytes');
                 })
-                .then(bhavcopy2.unzip)
+                .then(unzip)
                 .tap(function () {
                     progress(params, actions, 'unzip', 'completed', params.zipFileName, 'csvfilesize: ' + params.csvFileSize + ' bytes');
                 })
-                .then(bhavcopy2.parse)
+                .then(parse)
                 .tap(function () {
                     progress(params, actions, 'parse', 'completed', params.csvFileName, 'csvrecords: ' + params.totalRecords + ' lines');
                 })
@@ -120,7 +169,7 @@ function doForEveryDate(params) {
                     onError(params, actions, e);
                 })
                 .finally(function () {
-                    progress(params, actions, 'all', 'completed', '', '');
+                    progress(params, actions, 'all', 'completed', '', params.totalRecords + ' lines read, ' + params.totalDocs + ' docs saved, ' + params.totalTickers + ' tickers analyzed, ' + (params.totalDocs - params.totalTickers) + ' failed to analyze');
                     params.records = [];
                     params.errors = [];
                     actions = [];
@@ -137,49 +186,52 @@ function doForEveryDate(params) {
     });
 }
 
-
-function nextDateToProcess(date) {
-    var cdt = calendar.date(date);
-    var params = {
-        date: cdt.date,
-        outputFolder: opts.outputFolder,
-        db: opts.mongodb,
-        collection: opts.mongocollection,
-        fdt: moment(cdt.date).format('YYYYMMDD'),
-        cdt: calendar.date(cdt.date),
-        counter: counter,
-        total: total
+function nextDateToProcess(opts) {
+    return function (date) {
+        var cdt = opts.calendar.date(date);
+        var paramsForHandler = {
+            date: cdt.date,
+            actionsToPerform: opts.actionsToPerform,
+            outputFolder: opts.outputFolder,
+            collection: opts.mongocollection,
+            db: opts.mongodb,
+            fdt: moment(cdt.date).format('YYYYMMDD'),
+            cdt: cdt,
+            counter: opts.counter,
+            total: opts.total
+        };
+        opts.counter += 1;
+        return [paramsForHandler, nextDate(date)];
     };
-    counter += 1;
-    return [params, nextDate(date)];
 }
 
-var toDatem = moment(opts.toDate);
-function untilToDate(date) {
-    return toDatem.diff(moment(date), 'days') < 0;
+function until(toDate) {
+    return function (date) {
+        return moment(toDate).diff(moment(date), 'days') < 0;
+    };
 }
 
-var mongodb;
-mongoclient.connect(opts.mongouri, function (err, db) {
-    if (err) {
-        handleError.reportError(newErrorObj('MongoConnectionError: ', {err: err}));
-    }
-    mongodb = db;
-    prices.init(db);
-    analyzer.init(db);
-    logger.info('connected to mongo');
-});
-
-var startTime = moment();
 function shutDown() {
-    var endTime = moment();
-    logger.info(total + ' dates took ' + endTime.diff(startTime) + ' ms');
-    setTimeout(function () {
-        logger.info('ALL DONE. sleeping');
-        mongodb.close();
-        logger.warn('Exiting now');
-    }, 1000);
+    mongodb.close();
+    logger.info('ALL DONE.');
+    logger.warn('Exiting now');
 }
 
-unfold(nextDateToProcess, untilToDate, doForEveryDate, opts.fromDate).finally(shutDown).done();
+function doIt(opts) {
+    var startTime = moment();
+    return unfold(nextDateToProcess(opts), until(opts.toDate), doForEveryDate, opts.fromDate)
+        .then(function () {
+            var endTime = moment();
+            logger.info('everything took ' + endTime.diff(startTime) + ' ms');
+        });
+}
+
+init(getProgramOpts(process.argv))
+    .then(connect)
+    .then(doIt)
+    .catch(function (e) {
+        handleError.reportError(e);
+    })
+    .finally(shutDown)
+    .done();
 

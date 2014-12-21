@@ -169,13 +169,13 @@ function savePrice(collection, data, cdt) {
             date: price.date,
             symbol: price.symbol,
             series: price.series
-        }, [['_id', 'asc']], price, {upsert: true}, function (err, doc) {
+        }, [['_id', 'asc']], price, {upsert: true, new: true}, function (err, doc) {
             if (err) {
                 reject(mu.newErrorObj('MongoSaveError: ', {err: err, id: price.identity}));
             } else {
                 price._id = doc._id;
             }
-            resolve(price);
+            resolve(doc);
         });
     });
 }

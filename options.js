@@ -4,18 +4,15 @@ var mu = require('./miscutils.js');
 var logger = require('./logger.js');
 
 var defaultOptions = {
-    fromDate: new Date(Date.parse('2014-12-16')),
-    toDate: new Date(Date.parse('2014-12-17')),
+    fromDate: new Date(Date.parse('1995-01-01')),
+    toDate: new Date(Date.parse('2014-12-19')),
     outputFolder: 'f:/projects/data/nseData',
     holidaysFile: './holidays.txt',
     mongohost: 'localhost',
     mongoport: '27017',
-    mongodb: 'test',
+    mongodb: 'nse',
     mongocollection: 'prices',
-    downloadPause: 2000,
-    unzipPause: 100,
-    parsePause: 1000,
-    analysisPause: 25000
+    actionsToPerform: 'parse,save,analyze' //download,unzip,parse,save,analyze
 };
 
 function getProgramOpts(args) {
@@ -28,10 +25,7 @@ function getProgramOpts(args) {
             'mongoport': String,
             'mongodb': String,
             'mongocollection': String,
-            'downloadPause': Number,
-            'unzipPause': Number,
-            'parsePause': Number,
-            'analysisPause': Number
+            'actions': String
         },
         parsed = nopt(knownOpts, {}, args, 2);
     parsed.fromDate = parsed.fromDate || defaultOptions.fromDate;
@@ -41,10 +35,7 @@ function getProgramOpts(args) {
     parsed.mongodb = (parsed.mongodb || defaultOptions.mongodb);
     parsed.mongouri = 'mongodb://' + (parsed.mongohost || defaultOptions.mongohost) + ':' + (parsed.mongoport || defaultOptions.mongoport) + '/' + (parsed.mongodb || defaultOptions.mongodb);
     parsed.mongocollection = parsed.mongocollection || defaultOptions.mongocollection;
-    parsed.downloadPause = parsed.downloadPause || defaultOptions.downloadPause;
-    parsed.unzipPause = parsed.unzipPause || defaultOptions.unzipPause;
-    parsed.parsePause = parsed.parsePause || defaultOptions.parsePause;
-    parsed.analysisPause = parsed.analysisPause || defaultOptions.analysisPause;
+    parsed.actionsToPerform = parsed.actions || defaultOptions.actionsToPerform;
     parsed.fromDate = mu.hackDateForTZ(parsed.fromDate);
     parsed.toDate = mu.hackDateForTZ(parsed.toDate);
     parsed.pid = process.pid;

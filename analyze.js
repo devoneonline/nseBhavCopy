@@ -27,7 +27,7 @@ function getPrevDoc(ticker, doc) {
     };
 }
 
-function analyzeTickerForPrevDate(collection, price, prevDate, tagToUpdate) {
+function analyzeTickerForPrevDate(collection, price, prevDate, alternatePrevDates, tagToUpdate) {
     return promise(function (resolve, reject, notify) {
         var prices = mongodb.collection(collection);
         prices.findOne({
@@ -35,10 +35,16 @@ function analyzeTickerForPrevDate(collection, price, prevDate, tagToUpdate) {
             symbol: price.symbol,
             series: price.series
         }, {fields: {date: 1, open: 1, high: 1, low: 1, close: 1}}, function (err, doc) {
-            if (err || doc === null || doc === undefined) {
-                reject(mu.newErrorObj(err, {
-                    couldNotFind: tagToUpdate + ':' + moment(prevDate).format('YYYYMMDD')
-                }));
+            if (err) {
+                reject(mu.newErrorObj(err, ''));
+            }
+            if (doc === null || doc === undefined) {
+                if (alternatePrevDates.length > 0) {
+                    var p = analyzeTickerForPrevDate(collection, price, alternatePrevDates.shift(), alternatePrevDates, tagToUpdate);
+                    resolve(p);
+                } else {
+                    reject(mu.newErrorObj('', {couldNotFind: tagToUpdate + ':' + moment(prevDate).format('YYYYMMDD')}));
+                }
             } else {
                 price.missing = price.missing.replace(tagToUpdate + ',', '');
                 price[tagToUpdate] = getPrevDoc(price, doc);
@@ -51,16 +57,16 @@ function analyzeTickerForPrevDate(collection, price, prevDate, tagToUpdate) {
 function analyzeTicker(collection, price, cdt) {
     return promise(function (resolve, reject, notify) {
         price.missing = 'yest,weekAgo,monthAgo,quarterAgo,sixMonthsAgo,yearAgo,threeYearsAgo,fiveYearsAgo';
-        var prevDates = [{date: cdt.prevDate, tagToUpdate: 'yest'},
-            {date: cdt.prevWeek, tagToUpdate: 'weekAgo'},
-            {date: cdt.prevMonth, tagToUpdate: 'monthAgo'},
-            {date: cdt.prevQuarter, tagToUpdate: 'quarterAgo'},
-            {date: cdt.prevHalfYear, tagToUpdate: 'sixMonthsAgo'},
-            {date: cdt.prevYear, tagToUpdate: 'yearAgo'},
-            {date: cdt.prev3Year, tagToUpdate: 'threeYearsAgo'},
-            {date: cdt.prev5Year, tagToUpdate: 'fiveYearsAgo'}];
+        var prevDates = [{date: cdt.prevDate, tagToUpdate: 'yest', alternativeDates: cdt.nearestPrevDates},
+            {date: cdt.prevWeek, tagToUpdate: 'weekAgo', alternativeDates: cdt.nearestPrevWeek},
+            {date: cdt.prevMonth, tagToUpdate: 'monthAgo', alternativeDates: cdt.nearestPrevMonth},
+            {date: cdt.prevQuarter, tagToUpdate: 'quarterAgo', alternativeDates: cdt.nearestPrevQuarter},
+            {date: cdt.prevHalfYear, tagToUpdate: 'sixMonthsAgo', alternativeDates: cdt.nearestPrevHalfYear},
+            {date: cdt.prevYear, tagToUpdate: 'yearAgo', alternativeDates: cdt.nearestPrevYear},
+            {date: cdt.prev3Year, tagToUpdate: 'threeYearsAgo', alternativeDates: cdt.nearestPrev3Year},
+            {date: cdt.prev5Year, tagToUpdate: 'fiveYearsAgo', alternativeDates: cdt.nearestPrev5Year}];
         settle(prevDates.map(function (pd) {
-            return analyzeTickerForPrevDate(collection, price, pd.date, pd.tagToUpdate);
+            return analyzeTickerForPrevDate(collection, price, pd.date, pd.alternativeDates, pd.tagToUpdate);
         })).then(function (descriptors) {
             var errcount = 0;
             var reasons = [];
@@ -71,7 +77,7 @@ function analyzeTicker(collection, price, cdt) {
                 }
             });
             if (errcount >= 7) {
-                reject(mu.newErrorObj(price.identity, {couldNotFind: reasons}));
+                reject(mu.newErrorObj(price.identity, ''));
             } else {
                 var prices = mongodb.collection(collection);
                 prices.findAndModify({

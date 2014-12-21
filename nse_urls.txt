@@ -1,0 +1,6 @@
+www.nseindia.com/live_market/dynaContent/live_watch/get_quote/companySnapshot/getCorporateActionsHDFC.json
+www.nseindia.com/live_market/dynaContent/live_watch/get_quote/companySnapshot/getAnnouncements
+www.nseindia.com/live_market/dynaContent/live_watch/get_quote/companySnapshot/getBoardMeetings
+www.nseindia.com/live_market/dynaContent/live_watch/get_quote/companySnapshot/getFinancialResults
+www.nseindia.com/live_market/dynaContent/live_watch/get_quote/companySnapshot/getContactDetails
+www.nseindia.com/live_market/dynaContent/live_watch/get_quote/companySnapshot/getShareholdingPattern
